@@ -25,22 +25,22 @@ const userSchema = new mongoose.Schema({
   },
   firstname: {
     type: String,
-    required: true,
+    // required: true,
     trim: true,
   },
   lastname: {
     type: String,
-    required: true,
+    // required: true,
     trim: true,
   },
   dob: {
     type: Date,
-    required: true,
+    // required: true,
   },
   gender: {
     type: String,
     enum: ['male', 'female', 'other'],
-    required: true,
+    // required: true,
   },
   bio: {
     type: String,

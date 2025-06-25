@@ -88,6 +88,7 @@ export const login = async (_, { email, password }, { res }) => {
       sameSite: "Strict",
       maxAge: 7 * 24 * 60 * 60 * 1000, // Cookie expires in 7 days
     });
+
     await userModel.findOneAndUpdate(
       { email: email },
       { $set: { lastLogin: new Date() } },
@@ -95,12 +96,15 @@ export const login = async (_, { email, password }, { res }) => {
     );
 
     // Return structured response
+    console.log(user)
+
     return {
       success: true,
       message: "Login successful",
       statusCode: 200,
-      user,
+      data: user,
     };
+
   } catch (error) {
     // Extract error details
     const [statusCode, message] = error.message.split(": ");
