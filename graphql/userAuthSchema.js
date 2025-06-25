@@ -6,7 +6,12 @@ export const userTypeDefs = gql`
     id: ID!
     username: String!
     email: String!
+    bio:String
+    profilePicture:String
+    isVerified:Boolean
+    role:String
     createdAt: String
+    updatedAt:String
   }
    type OTPResponse {
     success: Boolean!
@@ -18,13 +23,13 @@ export const userTypeDefs = gql`
     success: Boolean!
     message: String!
     statusCode:Int!
-    user: User
+    data: User
   }
   type loginResponse {
     success: Boolean!
     message: String!
     statusCode:Int!
-    user: User
+    data: User
   }
 
   extend type Query {
