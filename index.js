@@ -24,7 +24,7 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 app.disable("x-powered-by");
-app.use(cors());
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use(cookieParser());
 

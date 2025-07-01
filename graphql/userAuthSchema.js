@@ -1,45 +1,71 @@
 import { gql } from 'apollo-server-express';
-import { register, login, sendOTP } from '../resolvers/userAuth.js';
+import {
+  register,
+  login,
+  sendOTP,
+  googleAuth
+} from '../resolvers/userAuth.js';
 
 export const userTypeDefs = gql`
   type User {
     id: ID!
     username: String!
     email: String!
-    bio:String
-    profilePicture:String
-    isVerified:Boolean
-    role:String
+    firstname: String
+    lastname: String
+    bio: String
+    profilePicture: String
+    isVerified: Boolean
+    sentLinks:[User]
+    receivedLinks:[User]
+    links:[User]
+    role: String
+    provider: String
+    googleId: String
     createdAt: String
-    updatedAt:String
+    updatedAt: String
   }
-   type OTPResponse {
+
+
+  type OTPResponse {
     success: Boolean!
     message: String!
-    OTP:String
+    OTP: String
   }
 
   type registerResponse {
     success: Boolean!
     message: String!
-    statusCode:Int!
-    data: User
+    statusCode: Int!
+    user: User
   }
+
   type loginResponse {
     success: Boolean!
     message: String!
-    statusCode:Int!
-    data: User
+    statusCode: Int!
+    token: String
+    userData: User
   }
+  type AuthResponse {
+  success: Boolean!
+  message: String!
+  statusCode: Int!
+  token: String
+  userData: User
+}
+
 
   extend type Query {
     _user: String
   }
 
   extend type Mutation {
-    register(username: String!, email: String!, password: String!, otp:Int!): registerResponse!
+    register(username: String!, email: String!, password: String!, otp: Int!): registerResponse!
     login(email: String!, password: String!): loginResponse!
-    sendOTP(email:String!):OTPResponse
+    googleAuth(idToken: String!): AuthResponse!
+    sendOTP(email: String!): OTPResponse
+   
   }
 `;
 
@@ -47,6 +73,7 @@ export const userResolvers = {
   Mutation: {
     register,
     login,
-    sendOTP
+    sendOTP,
+    googleAuth
   },
 };

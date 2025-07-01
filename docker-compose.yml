@@ -1,21 +1,21 @@
 version: '3.8'
 
 services:
-  app:
+  backend:
     build: .
-    container_name: viawave-backend
     ports:
-      - '5000:5000'
+      - '5000:9090' # Maps host port 5000 to container port 9090
+    container_name: viawave-backend-container
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongo:27017/viawave
+    depends_on:
+      - mongo
     volumes:
       - .:/app
       - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - MONGO_URI=mongodb://mongo:27017/viawave
-    env_file:
-      - .env
-    depends_on:
-      - mongo
+    networks:
+      - viawave-network
 
   mongo:
     image: mongo:latest
@@ -24,6 +24,14 @@ services:
       - '27017:27017'
     volumes:
       - mongo-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=viawave
+    networks:
+      - viawave-network
 
 volumes:
   mongo-data:
+
+networks:
+  viawave-network:
+    driver: bridge

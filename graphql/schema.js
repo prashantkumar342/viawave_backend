@@ -1,5 +1,6 @@
 import { mergeTypeDefs, mergeResolvers } from '@graphql-tools/merge';
 import { userTypeDefs, userResolvers } from './userAuthSchema.js';
+import { findUserResolvers, findUserTypeDefs } from './findUserSchema.js';
 
 const rootTypeDefs = `#graphql
 type Query {
@@ -14,7 +15,9 @@ type Mutation{
 export const typeDefs = mergeTypeDefs([
   rootTypeDefs,
   userTypeDefs,
+  findUserTypeDefs
 ]);
 export const resolvers = mergeResolvers([
   userResolvers,
+  findUserResolvers
 ])
