@@ -19,31 +19,6 @@ export async function auth(req, res, next) {
       const decode = await jwt.verify(token, process.env.JWT_SECRET);
 
       const userDoc = await User.findById(decode.id)
-        .populate("additionalDetails")
-        .populate({
-          path: "courses",
-          populate: {
-            path: "instructor",
-            model: "user",
-            select: "firstName lastName _id",
-          },
-        })
-        .populate({
-          path: "courses",
-          populate: {
-            path: "category",
-            model: "Category",
-            select: "name _id",
-          },
-        })
-        .populate({
-          path: "materials",
-          populate: [
-            {
-              path: "author",
-            }
-          ],
-        });
 
       if (!userDoc) {
         console.log("User not found in database");
@@ -52,28 +27,6 @@ export async function auth(req, res, next) {
 
 
 
-      // Check if current session is valid
-      if (!userDoc.currentSession ||
-        !userDoc.currentSession.isActive ||
-        userDoc.currentSession.token !== token) {
-
-        console.log("Session validation failed - Details:", {
-          hasSession: !!userDoc.currentSession,
-          isActive: userDoc.currentSession?.isActive,
-          tokenMatch: userDoc.currentSession?.token === token,
-          dbToken: userDoc.currentSession?.token?.substring(0, 20) + "...",
-          reqToken: token?.substring(0, 20) + "..."
-        });
-
-        // Clear invalid cookie
-        res.clearCookie("token");
-
-        return res.status(401).json({
-          success: false,
-          message: "Session expired. Please login again.",
-          sessionInvalid: true
-        });
-      }
 
       req.user = userDoc;
       console.log("Auth middleware successful");

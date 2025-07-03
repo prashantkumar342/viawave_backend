@@ -1,5 +1,5 @@
 import { handleLinksSocket } from "./handleLinksSocket.js";
 
-export default function handleSocketsIndex(socket, io) {
+export default async function handleSocketsIndex(socket, io) {
   handleLinksSocket(socket, io);
 }

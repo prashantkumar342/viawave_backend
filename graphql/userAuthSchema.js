@@ -16,9 +16,9 @@ export const userTypeDefs = gql`
     bio: String
     profilePicture: String
     isVerified: Boolean
-    sentLinks:[User]
-    receivedLinks:[User]
-    links:[User]
+    sentLinks:[ID]
+    receivedLinks:[ID]
+    links:[ID]
     role: String
     provider: String
     googleId: String
