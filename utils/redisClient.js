@@ -3,7 +3,7 @@ import Redis from "ioredis";
 export const redis = new Redis({
   host: process.env.REDIS_HOST || "127.0.0.1",
   port: process.env.REDIS_PORT || 6379,
-  // password: process.env.REDIS_PASSWORD || undefined,
+  password: process.env.REDIS_PASSWORD || undefined,
   retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
   lazyConnect: true, // Don't connect immediately
