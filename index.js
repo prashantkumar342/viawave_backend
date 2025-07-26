@@ -56,7 +56,7 @@ socketIoServer(httpServer);
 
 // Start server
 const PORT = process.env.PORT || 8595;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   Logger.success(
     `🌏 REST & GraphQL server running at http://localhost:${PORT}`
   );
