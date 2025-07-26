@@ -1,17 +1,18 @@
-import express from "express";
-import dotenv from "dotenv";
-import http from "http";
-import cors from "cors";
-import { ApolloServer } from "apollo-server-express";
-import { makeExecutableSchema } from "@graphql-tools/schema";
-import cookieParser from "cookie-parser";
-import helmet from "helmet";
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { ApolloServer } from 'apollo-server-express';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import express from 'express';
+import helmet from 'helmet';
+import http from 'http';
 
-import { socketIoServer } from "./ws/socket.js";
-import connectDb from "./config/dbConfig.js";
-import { typeDefs, resolvers } from "./graphql/schema.js";
+import connectDb from './config/dbConfig.js';
+import { resolvers, typeDefs } from './graphql/schema.js';
+import { Logger } from './utils/logger.js';
+import { socketIoServer } from './ws/socket.js';
 
-dotenv.config({ path: "./.env" });
+dotenv.config({ path: './.env' });
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -20,14 +21,15 @@ const httpServer = http.createServer(app);
 connectDb(process.env.DATABASE_URL);
 
 // Middleware
-app.use(helmet({
-  contentSecurityPolicy: false,
-}));
-app.disable("x-powered-by");
-app.use(cors({ origin: "*" }));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
+app.disable('x-powered-by');
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(cookieParser());
-
 
 // Create GraphQL schema
 const schema = makeExecutableSchema({ typeDefs, resolvers });
@@ -39,22 +41,26 @@ const apolloServer = new ApolloServer({
   context: ({ req, res }) => ({ req, res }), // Pass req & res
   formatError: (error) => {
     // Extract custom status codes from error message
-    const [statusCode, message] = error.message.split(": ");
+    const [statusCode, message] = error.message.split(': ');
 
     return {
       success: false,
       statusCode: Number(statusCode) || 500, // Default to 500 if missing
-      message: message || "Internal Server Error",
+      message: message || 'Internal Server Error',
     };
   },
 });
 await apolloServer.start();
-apolloServer.applyMiddleware({ app, path: "/graphql" });
+apolloServer.applyMiddleware({ app, path: '/graphql' });
 socketIoServer(httpServer);
 
 // Start server
 const PORT = process.env.PORT || 8595;
 httpServer.listen(PORT, () => {
-  console.log(`🌏 REST & GraphQL server running at http://localhost:${PORT}`);
-  console.log(`🧠 GraphQL endpoint at http://localhost:${PORT}${apolloServer.graphqlPath}`);
+  Logger.success(
+    `🌏 REST & GraphQL server running at http://localhost:${PORT}`
+  );
+  Logger.success(
+    `🧠 GraphQL endpoint at http://localhost:${PORT}${apolloServer.graphqlPath}`
+  );
 });
