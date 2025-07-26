@@ -1,28 +1,40 @@
-import Redis from "ioredis";
+// redis.js
+import Redis from 'ioredis';
 
+import { Logger } from './logger.js';
+
+// Initialize Redis with optional environment-based configuration
 export const redis = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
+  host: process.env.REDIS_HOST || '127.0.0.1',
   port: process.env.REDIS_PORT || 6379,
   password: process.env.REDIS_PASSWORD || undefined,
   retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
-  lazyConnect: true, // Don't connect immediately
+  lazyConnect: true, // Manual connection required
 });
 
-// Handle connection events
+// Redis event listeners
 redis.on('connect', () => {
-  console.log('✅ Connected to Redis');
+  Logger.success('✅ Connected to Redis');
 });
 
 redis.on('error', (err) => {
-  console.error('❌ Redis connection error:', err.message);
+  Logger.error('❌ Redis connection error:', err.message);
 });
 
 redis.on('close', () => {
-  console.log('🔴 Redis connection closed');
+  Logger.warn('🔴 Redis connection closed');
 });
 
-// Test connection
-redis.ping().catch(err => {
-  console.error('Redis ping failed:', err.message);
-});
+// Explicit connection when using lazyConnect
+(async () => {
+  try {
+    await redis.connect();
+    Logger.success('✅ Redis manually connected (lazyConnect)');
+
+    const pong = await redis.ping();
+    Logger.success(`✅ Redis ping response: ${pong}`);
+  } catch (err) {
+    Logger.error('❌ Redis connection or ping failed:', err.message);
+  }
+})();
