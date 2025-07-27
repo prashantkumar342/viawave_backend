@@ -4,8 +4,10 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import fs from 'fs';
 import helmet from 'helmet';
 import http from 'http';
+import https from 'https';
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
@@ -15,7 +17,15 @@ import { socketIoServer } from './ws/socket.js';
 dotenv.config({ path: './.env' });
 
 const app = express();
+
+// Load SSL cert
+const sslOptions = {
+  key: fs.readFileSync('./ssl/server.key'),
+  cert: fs.readFileSync('./ssl/server.cert'),
+};
+
 const httpServer = http.createServer(app);
+const httpsServer = https.createServer(sslOptions, app);
 
 // Connect MongoDB
 connectDb(process.env.DATABASE_URL);
@@ -38,29 +48,38 @@ const schema = makeExecutableSchema({ typeDefs, resolvers });
 const apolloServer = new ApolloServer({
   schema,
   introspection: true,
-  context: ({ req, res }) => ({ req, res }), // Pass req & res
+  context: ({ req, res }) => ({ req, res }),
   formatError: (error) => {
-    // Extract custom status codes from error message
     const [statusCode, message] = error.message.split(': ');
-
     return {
       success: false,
-      statusCode: Number(statusCode) || 500, // Default to 500 if missing
+      statusCode: Number(statusCode) || 500,
       message: message || 'Internal Server Error',
     };
   },
 });
+
 await apolloServer.start();
 apolloServer.applyMiddleware({ app, path: '/graphql' });
-socketIoServer(httpServer);
 
-// Start server
-const PORT = process.env.PORT || 8595;
-httpServer.listen(PORT, '0.0.0.0', () => {
+// Setup Socket.IO on both servers
+socketIoServer(httpServer);
+socketIoServer(httpsServer);
+
+// Start HTTP and HTTPS servers
+const HTTP_PORT = process.env.PORT || 9095;
+const HTTPS_PORT = process.env.HTTPS_PORT || 8443;
+
+httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
+  Logger.success(`🌐 HTTP server: http://<IP>:${HTTP_PORT}`);
   Logger.success(
-    `🌏 REST & GraphQL server running at http://localhost:${PORT}`
+    `🚀 GraphQL:    http://<IP>:${HTTP_PORT}${apolloServer.graphqlPath}`
   );
+});
+
+httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+  Logger.success(`🔐 HTTPS server: https://<IP>:${HTTPS_PORT}`);
   Logger.success(
-    `🧠 GraphQL endpoint at http://localhost:${PORT}${apolloServer.graphqlPath}`
+    `🧠 Secure GraphQL: https://<IP>:${HTTPS_PORT}${apolloServer.graphqlPath}`
   );
 });
