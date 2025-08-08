@@ -14,6 +14,7 @@ export const finUserResolvers = {
       ]);
 
       return {
+        success: true,
         totalCount,
         hasMore: offset + results.length < totalCount,
         results,
@@ -42,8 +43,7 @@ export const finUserResolvers = {
             postsCount: user.postsCount || 0,
             followersCount: user.followersCount || 0,
             followingCount: user.followingCount || 0,
-          }
-
+          },
         };
       } catch (error) {
         throw new Error(error.message || 'Failed to fetch user');

@@ -1,5 +1,6 @@
-import { gql } from "apollo-server-express"
-import { finUserResolvers } from "../resolvers/findUser.js"
+import { gql } from 'apollo-server-express';
+
+import { finUserResolvers } from '../resolvers/findUser.js';
 
 export const findUserTypeDefs = gql`
   type User {
@@ -19,19 +20,24 @@ export const findUserTypeDefs = gql`
   }
 
   type UserSearchResult {
+    success: Boolean!
     totalCount: Int!
     hasMore: Boolean!
     results: [User!]!
   }
 
-  type getUser{
-user:User!
+  type getUser {
+    user: User!
   }
 
   extend type Query {
-    searchUsers(username: String!, limit: Int = 10, offset: Int = 0): UserSearchResult!
-    getUser(id:String!):getUser!
+    searchUsers(
+      username: String!
+      limit: Int = 10
+      offset: Int = 0
+    ): UserSearchResult!
+    getUser(id: String!): getUser!
   }
-`
+`;
 
-export { finUserResolvers as findUserResolvers }
+export { finUserResolvers as findUserResolvers };
