@@ -1,5 +1,5 @@
 // models/messageModel.ts
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const attachmentSchema = new mongoose.Schema({
   url: {
@@ -22,12 +22,12 @@ const messageSchema = new mongoose.Schema(
   {
     conversation: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Conversation",
+      ref: 'Conversation',
       required: true,
     },
     sender: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
     text: {
@@ -37,13 +37,13 @@ const messageSchema = new mongoose.Schema(
     seenBy: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: 'User',
       },
     ],
     deletedFor: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: 'User',
       },
     ],
   },
@@ -52,4 +52,4 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.index({ conversation: 1, createdAt: -1 });
 
-export const Message = mongoose.model("Message", messageSchema);
+export const Message = mongoose.model('Message', messageSchema);

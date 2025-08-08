@@ -8,6 +8,7 @@ import fs from 'fs';
 import helmet from 'helmet';
 import http from 'http';
 import https from 'https';
+import path from 'path';
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
@@ -17,15 +18,9 @@ import { socketIoServer } from './ws/socket.js';
 dotenv.config({ path: './.env' });
 
 const app = express();
-
-// Load SSL cert
-const sslOptions = {
-  key: fs.readFileSync('./ssl/server.key'),
-  cert: fs.readFileSync('./ssl/server.cert'),
-};
-
-const httpServer = http.createServer(app);
-const httpsServer = https.createServer(sslOptions, app);
+const __dirname = path.resolve();
+const isProduction = process.env.NODE_ENV === 'production';
+const useHttps = process.env.USE_HTTPS === 'true';
 
 // Connect MongoDB
 connectDb(process.env.DATABASE_URL);
@@ -37,14 +32,20 @@ app.use(
   })
 );
 app.disable('x-powered-by');
-app.use(cors({ origin: '*' }));
+
+app.use(
+  cors({
+    origin: '*', // or use a whitelist for production
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 app.use(cookieParser());
 
 // Create GraphQL schema
 const schema = makeExecutableSchema({ typeDefs, resolvers });
 
-// Create Apollo server
 const apolloServer = new ApolloServer({
   schema,
   introspection: true,
@@ -62,24 +63,44 @@ const apolloServer = new ApolloServer({
 await apolloServer.start();
 apolloServer.applyMiddleware({ app, path: '/graphql' });
 
-// Setup Socket.IO on both servers
-socketIoServer(httpServer);
-socketIoServer(httpsServer);
-
-// Start HTTP and HTTPS servers
+// Server creation logic
 const HTTP_PORT = process.env.PORT || 9095;
 const HTTPS_PORT = process.env.HTTPS_PORT || 8443;
 
+const httpServer = http.createServer(app);
+
+let httpsServer;
+if (useHttps) {
+  try {
+    const sslOptions = {
+      key: fs.readFileSync(path.join(__dirname, './ssl/server.key')),
+      cert: fs.readFileSync(path.join(__dirname, './ssl/server.cert')),
+    };
+    httpsServer = https.createServer(sslOptions, app);
+  } catch (err) {
+    Logger.error('❌ SSL cert/key not found or invalid.', err);
+    process.exit(1);
+  }
+}
+
+// Attach Socket.IO to servers
+socketIoServer(httpServer);
+if (useHttps && httpsServer) socketIoServer(httpsServer);
+
+// Start HTTP server
 httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
-  Logger.success(`🌐 HTTP server: http://<IP>:${HTTP_PORT}`);
+  Logger.success(`🌐 HTTP server: http://localhost:${HTTP_PORT}`);
   Logger.success(
-    `🚀 GraphQL:    http://<IP>:${HTTP_PORT}${apolloServer.graphqlPath}`
+    `🚀 GraphQL:    http://localhost:${HTTP_PORT}${apolloServer.graphqlPath}`
   );
 });
 
-httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
-  Logger.success(`🔐 HTTPS server: https://<IP>:${HTTPS_PORT}`);
-  Logger.success(
-    `🧠 Secure GraphQL: https://<IP>:${HTTPS_PORT}${apolloServer.graphqlPath}`
-  );
-});
+// Start HTTPS server if enabled
+if (useHttps && httpsServer) {
+  httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+    Logger.success(`🔐 HTTPS server: https://localhost:${HTTPS_PORT}`);
+    Logger.success(
+      `🧠 Secure GraphQL: https://localhost:${HTTPS_PORT}${apolloServer.graphqlPath}`
+    );
+  });
+}
