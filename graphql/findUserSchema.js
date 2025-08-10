@@ -13,6 +13,7 @@ export const findUserTypeDefs = gql`
     profilePicture: String
     isVerified: Boolean
     role: String
+    is_linked: String
     provider: String
     googleId: String
     createdAt: String
@@ -28,6 +29,15 @@ export const findUserTypeDefs = gql`
 
   type getUser {
     user: User!
+  }
+
+  type LinkStatusUpdate {
+    userId: ID!
+    status: String! # 'sent', 'pending', 'linked'
+  }
+
+  extend type Subscription {
+    linkRequestStatusUpdated(receiverId: ID!): LinkStatusUpdate!
   }
 
   extend type Query {

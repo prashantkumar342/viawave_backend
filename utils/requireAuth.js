@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 import { User } from '../models/userModel.js';
+import { Logger } from './logger.js';
 
 export const requireAuth = async (req) => {
   const token =
@@ -9,6 +10,7 @@ export const requireAuth = async (req) => {
     req.headers.authorization?.replace('Bearer ', '');
   console.log(req.headers.authorization?.replace('Bearer ', ''));
   if (!token) {
+    Logger.error('401:Token missing');
     throw new Error('401:Token missing');
   }
 
@@ -18,7 +20,7 @@ export const requireAuth = async (req) => {
     if (!user) {
       throw new Error('401:User not found');
     }
-    console.log(user);
+    // console.log(user);
 
     return user; // ✅ Valid authenticated user
   } catch (err) {

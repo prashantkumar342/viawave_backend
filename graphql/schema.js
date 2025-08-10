@@ -1,7 +1,15 @@
-import { mergeTypeDefs, mergeResolvers } from '@graphql-tools/merge';
-import { userTypeDefs, userResolvers } from './userAuthSchema.js';
+import { mergeResolvers, mergeTypeDefs } from '@graphql-tools/merge';
+
 import { findUserResolvers, findUserTypeDefs } from './findUserSchema.js';
-import { userConversationResolvers, userConversationTypeDefs } from './userConversationSchema.js';
+import { userResolvers, userTypeDefs } from './userAuthSchema.js';
+import {
+  userConversationResolvers,
+  userConversationTypeDefs,
+} from './userConversationSchema.js';
+import {
+  userLinkRequestResolvers,
+  userLinkRequestTypeDefs,
+} from './userLinksSchema.js';
 
 const rootTypeDefs = `#graphql
 type Query {
@@ -11,16 +19,23 @@ type Query {
 type Mutation{
   _empty:String
 }
+
+type Subscription {
+  _empty: String
+}
+
 `;
 
 export const typeDefs = mergeTypeDefs([
   rootTypeDefs,
   userTypeDefs,
   findUserTypeDefs,
-  userConversationTypeDefs
+  userConversationTypeDefs,
+  userLinkRequestTypeDefs,
 ]);
 export const resolvers = mergeResolvers([
   userResolvers,
   findUserResolvers,
-  userConversationResolvers
-])
+  userConversationResolvers,
+  userLinkRequestResolvers,
+]);
