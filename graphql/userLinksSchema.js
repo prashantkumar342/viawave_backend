@@ -35,6 +35,8 @@ export const userLinkRequestTypeDefs = gql`
   extend type Mutation {
     handleLinkRequest(receiverId: ID!): LinkRequestResponse!
     handleWithdrawRequest(receiverId: ID!): LinkRequestResponse!
+    handleAcceptRequest(senderId: ID!): LinkRequestResponse!
+    handleRemoveLink(linkedUserId: ID!): LinkRequestResponse!
   }
 `;
 
@@ -42,6 +44,8 @@ export const userLinkRequestResolvers = {
   Mutation: {
     handleLinkRequest: userLinkResolvers.Mutation.handleLinkRequest,
     handleWithdrawRequest: userLinkResolvers.Mutation.handleWithdrawRequest,
+    handleAcceptRequest: userLinkResolvers.Mutation.handleAcceptRequest,
+    handleRemoveLink: userLinkResolvers.Mutation.handleRemoveLink,
   },
   Subscription: {
     linkRequestUpdated: userLinkResolvers.Subscription.linkRequestUpdated,

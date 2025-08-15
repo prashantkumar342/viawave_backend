@@ -70,18 +70,21 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // sentLinks has the objectIds of the user's which are used to send the link requests or we can say sent request's users
     sentLinks: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
       },
     ],
+    // receivedLinks has the objectIds of the user's who sent the linkRequest
     receivedLinks: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
       },
     ],
+    // links has the user's objectIds that are linked(or friends) with that user or accepted the request
     links: [
       {
         type: mongoose.Schema.Types.ObjectId,

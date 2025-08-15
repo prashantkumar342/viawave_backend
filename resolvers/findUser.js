@@ -1,4 +1,5 @@
 import { User as UserModel } from '../models/userModel.js';
+import { Logger } from '../utils/logger.js';
 import { requireAuth } from '../utils/requireAuth.js';
 
 export const finUserResolvers = {
@@ -9,33 +10,57 @@ export const finUserResolvers = {
          const regex = new RegExp(username, 'i');
 
          const [results, totalCount] = await Promise.all([
-            UserModel.find({ username: { $regex: regex } })
+            UserModel.find({
+               username: { $regex: regex },
+               _id: { $ne: currentUser._id }
+            })
                .skip(offset)
                .limit(limit)
                .select(
                   'username email firstname lastname profilePicture links sentLinks receivedLinks'
                )
                .lean(),
-            UserModel.countDocuments({ username: { $regex: regex } }),
+            UserModel.countDocuments({
+               username: { $regex: regex },
+               _id: { $ne: currentUser._id } // Fix: exclude current user from count too
+            }),
          ]);
 
          // Add `is_linked` for each user
          const enrichedResults = results.map((user) => {
-            if (String(user._id) === String(currentUser._id)) {
+            const userId = String(user._id);
+            const currentUserId = String(currentUser._id);
+
+            // Convert ObjectIds to strings for comparison
+            const currentUserLinks = currentUser.links?.map(id => String(id)) || [];
+            const currentUserSentLinks = currentUser.sentLinks?.map(id => String(id)) || [];
+            const currentUserReceivedLinks = currentUser.receivedLinks?.map(id => String(id)) || [];
+            const userLinks = user.links?.map(id => String(id)) || [];
+
+            // Self check (shouldn't happen due to $ne filter, but keeping for safety)
+            if (userId === currentUserId) {
                return { ...user, id: user._id, is_linked: 'self' };
             }
+
+            // Fully linked (both have each other in `links`)
             if (
-               currentUser.links?.includes(user._id) &&
-               user.links?.includes(currentUser._id)
+               currentUserLinks.includes(userId) &&
+               userLinks.includes(currentUserId)
             ) {
                return { ...user, id: user._id, is_linked: 'linked' };
             }
-            if (currentUser.sentLinks?.includes(user._id)) {
+
+            // Current user sent request (user is in currentUser's sentLinks)
+            if (currentUserSentLinks.includes(userId)) {
                return { ...user, id: user._id, is_linked: 'sent' };
             }
-            if (currentUser.receivedLinks?.includes(user._id)) {
-               return { ...user, id: user._id, is_linked: 'pending' };
+
+            // Current user received request (user is in currentUser's receivedLinks)
+            if (currentUserReceivedLinks.includes(userId)) {
+               return { ...user, id: user._id, is_linked: 'accept' };
             }
+
+            // No relation
             return { ...user, id: user._id, is_linked: 'none' };
          });
 
@@ -47,13 +72,42 @@ export const finUserResolvers = {
          };
       },
 
-      getUser: async (_, { id }) => {
+      getUser: async (_, { id }, context) => {
          try {
             const user = await UserModel.findById(id).select(
-               'username email firstname lastname bio profilePicture isVerified createdAt postsCount followersCount followingCount'
+               'username email firstname lastname bio profilePicture isVerified createdAt postsCount followersCount followingCount links sentLinks receivedLinks'
             );
 
             if (!user) throw new Error('User not found');
+
+            // Get current user for is_linked calculation
+            let is_linked = 'none';
+            try {
+               const currentUser = await requireAuth(context.req);
+               const userId = String(user._id);
+               const currentUserId = String(currentUser._id);
+
+               // Convert ObjectIds to strings for comparison
+               const currentUserLinks = currentUser.links?.map(id => String(id)) || [];
+               const currentUserSentLinks = currentUser.sentLinks?.map(id => String(id)) || [];
+               const currentUserReceivedLinks = currentUser.receivedLinks?.map(id => String(id)) || [];
+               const userLinks = user.links?.map(id => String(id)) || [];
+
+               if (userId === currentUserId) {
+                  is_linked = 'self';
+               } else if (
+                  currentUserLinks.includes(userId) &&
+                  userLinks.includes(currentUserId)
+               ) {
+                  is_linked = 'linked';
+               } else if (currentUserSentLinks.includes(userId)) {
+                  is_linked = 'sent';
+               } else if (currentUserReceivedLinks.includes(userId)) {
+                  is_linked = 'accept';
+               }
+            } catch (authError) {
+               Logger.error("error in getUser", authError)
+            }
 
             return {
                user: {
@@ -65,10 +119,11 @@ export const finUserResolvers = {
                   bio: user.bio,
                   profilePicture: user.profilePicture,
                   isVerified: user.isVerified,
-                  joinedDate: user.createdAt, // Map to joinedDate if requested like that in schema
+                  joinedDate: user.createdAt,
                   postsCount: user.postsCount || 0,
                   followersCount: user.followersCount || 0,
                   followingCount: user.followingCount || 0,
+                  is_linked: is_linked,
                },
             };
          } catch (error) {

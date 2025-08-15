@@ -8,7 +8,7 @@ export const requireAuth = async (req) => {
     req.cookies.token ||
     req.body.token ||
     req.headers.authorization?.replace('Bearer ', '');
-  console.log(req.headers.authorization?.replace('Bearer ', ''));
+  // console.log(req.headers.authorization?.replace('Bearer ', ''));
   if (!token) {
     Logger.error('401:Token missing');
     throw new Error('401:Token missing');
