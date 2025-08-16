@@ -7,15 +7,24 @@ export const findUserTypeDefs = gql`
     id: ID!
     username: String!
     email: String!
-    firstname: String
-    lastname: String
+    fullName: String
+    dob: String
+    gender: String
     bio: String
-    profilePicture: String
-    isVerified: Boolean
-    role: String
     is_linked: String
-    provider: String
+    contactNumber: String
+    profilePicture: String
+    coverImage: String
+    isVerified: Boolean
+    email_verified: Boolean
+    sentLinks: [ID!]
+    receivedLinks: [ID!]
+    links: [ID!]
+    role: String
+    lastLogin: String
     googleId: String
+    provider: String
+    token: String
     createdAt: String
     updatedAt: String
   }

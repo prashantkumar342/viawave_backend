@@ -74,9 +74,7 @@ export const finUserResolvers = {
 
       getUser: async (_, { id }, context) => {
          try {
-            const user = await UserModel.findById(id).select(
-               'username email firstname lastname bio profilePicture isVerified createdAt postsCount followersCount followingCount links sentLinks receivedLinks'
-            );
+            const user = await UserModel.findById(id);
 
             if (!user) throw new Error('User not found');
 
@@ -118,14 +116,26 @@ export const finUserResolvers = {
                   lastname: user.lastname,
                   bio: user.bio,
                   profilePicture: user.profilePicture,
+                  coverImage: user.coverImage,
+                  gender: user.gender,
+                  dateOfBirth: user.dateOfBirth,
+                  location: user.location,
+                  phone: user.phone,
+                  website: user.website,
                   isVerified: user.isVerified,
                   joinedDate: user.createdAt,
                   postsCount: user.postsCount || 0,
                   followersCount: user.followersCount || 0,
                   followingCount: user.followingCount || 0,
                   is_linked: is_linked,
+                  lastLogin: user.lastLogin,
+                  updatedAt: user.updatedAt,
+                  status: user.status,
+                  interests: user.interests || [],
+                  socialLinks: user.socialLinks || {},
                },
             };
+
          } catch (error) {
             throw new Error(error.message || 'Failed to fetch user');
          }
