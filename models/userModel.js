@@ -25,7 +25,10 @@ const userSchema = new mongoose.Schema(
       },
       minlength: 6,
     },
-
+    currentProfession: {
+      type: [mongoose.Schema.Types.Mixed], // can hold any structure
+      default: [],
+    },
     fullName: {
       type: String,
       trim: true,

@@ -117,8 +117,18 @@ export const userLinkResolvers = {
 
         const linkUpdateForReceiver = {
           id: `${senderIdStr}_${userIdStr}_${Date.now()}`,
-          sender: { id: senderIdStr, name: sender.name || null, avatar: sender.avatar || null },
-          receiver: { id: userIdStr, name: user.name || null, avatar: user.avatar || null },
+          sender: {
+            id: senderIdStr,
+            name: sender.username || null,
+            avatar: sender.avatar || null,
+            totalLinks: sender?.links.length || 0
+          },
+          receiver: {
+            id: userIdStr,
+            name: user.username || null,
+            avatar: user.avatar || null,
+            totalLinks: user?.links.length || 0
+          },
           status: 'linked',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -126,8 +136,8 @@ export const userLinkResolvers = {
 
         const linkUpdateForSender = {
           ...linkUpdateForReceiver,
-          sender: { id: userIdStr, name: user.name || null, avatar: user.avatar || null },
-          receiver: { id: senderIdStr, name: sender.name || null, avatar: sender.avatar || null },
+          sender: { id: userIdStr, name: user.username || null, avatar: user.avatar || null, totalLinks: user?.links.length || 0 },
+          receiver: { id: senderIdStr, name: sender.username || null, avatar: sender.avatar || null, totalLinks: sender?.links.length || 0 },
         };
 
         // Publish status update to both parties
@@ -174,8 +184,8 @@ export const userLinkResolvers = {
 
         const linkUpdateForUser = {
           id: `${userIdStr}_${linkedUserIdStr}_${Date.now()}`,
-          sender: { id: userIdStr, name: user.name || null, avatar: user.avatar || null },
-          receiver: { id: linkedUserIdStr, name: linkedUser.name || null, avatar: linkedUser.avatar || null },
+          sender: { id: userIdStr, name: user.username || null, avatar: user.avatar || null, totalLinks: user?.links.length || 0 },
+          receiver: { id: linkedUserIdStr, name: linkedUser.username || null, avatar: linkedUser.avatar || null, totalLinks: linkedUser?.links.length || 0 },
           status: 'REMOVED',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -183,8 +193,8 @@ export const userLinkResolvers = {
 
         const linkUpdateForLinkedUser = {
           ...linkUpdateForUser,
-          sender: { id: linkedUserIdStr, name: linkedUser.name || null, avatar: linkedUser.avatar || null },
-          receiver: { id: userIdStr, name: user.name || null, avatar: user.avatar || null },
+          sender: { id: linkedUserIdStr, name: linkedUser.username || null, avatar: linkedUser.avatar || null, totalLinks: linkedUser?.links.length || 0 },
+          receiver: { id: userIdStr, name: user.username || null, avatar: user.avatar || null, totalLinks: user?.links.length || 0 },
         };
 
         // Publish status update to both parties

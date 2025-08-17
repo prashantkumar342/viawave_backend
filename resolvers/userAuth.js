@@ -211,12 +211,16 @@ export const login = async (_, { email, password }, { res }) => {
       token: token
     });
 
+    const userObj = user.toObject();
+    userObj.id = userObj._id; // GraphQL `id` field
+    userObj.totalLinks = user?.links.length || 0;
+
     return {
       success: true,
       message: "Login successful",
       statusCode: 200,
       token: token,
-      userData: user,
+      userData: userObj,
     };
   } catch (error) {
     console.error('Login Error:', error);

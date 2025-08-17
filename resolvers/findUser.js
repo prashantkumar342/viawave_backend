@@ -107,6 +107,11 @@ export const finUserResolvers = {
                Logger.error("error in getUser", authError)
             }
 
+            const [totalLinks] = await Promise.all([
+               user?.links?.length || 0,
+            ]);
+
+
             return {
                user: {
                   id: user._id.toString(),
@@ -127,6 +132,7 @@ export const finUserResolvers = {
                   postsCount: user.postsCount || 0,
                   followersCount: user.followersCount || 0,
                   followingCount: user.followingCount || 0,
+                  totalLinks: totalLinks,
                   is_linked: is_linked,
                   lastLogin: user.lastLogin,
                   updatedAt: user.updatedAt,

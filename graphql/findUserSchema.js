@@ -17,6 +17,7 @@ export const findUserTypeDefs = gql`
     coverImage: String
     isVerified: Boolean
     email_verified: Boolean
+    totalLinks:Int
     sentLinks: [ID!]
     receivedLinks: [ID!]
     links: [ID!]

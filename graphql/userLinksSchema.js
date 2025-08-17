@@ -25,7 +25,8 @@ export const userLinkRequestTypeDefs = gql`
   type UserSummary {
     id: ID!
     name: String
-    avatar: String
+    avatar: String,
+    totalLinks: Int
   }
 
   extend type Subscription {
