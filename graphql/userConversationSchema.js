@@ -1,7 +1,6 @@
-// userConversationSchema.js
 import { gql } from 'apollo-server-express';
 
-import { conversationResolvers } from '../resolvers/userConversation.js';
+import { conversationResolvers } from '../resolvers/conversationResolvers.js';
 
 export const userConversationTypeDefs = gql`
   type Attachment {
@@ -16,40 +15,86 @@ export const userConversationTypeDefs = gql`
     text: String
     sender: User!
     conversation: ID!
-    attachments: [Attachment!]
-    seenBy: [User!]
-    deletedFor: [User!]
+    attachments: [Attachment!]!
+    seenBy: [User!]!
+    deletedFor: [User!]!
     createdAt: String!
     updatedAt: String!
   }
 
   type Conversation {
     id: ID!
+    type: ConversationType!
     participants: [User!]!
+    otherUser: User!
     lastMessage: Message
+    groupName: String
+    groupAvatar: String
+    unreadCounts: [UnreadCount!]!
+    myUnreadCount: Int!
     createdAt: String!
     updatedAt: String!
   }
 
+  type UnreadCount {
+    userId: ID!
+    count: Int!
+  }
+
+  enum ConversationType {
+    PRIVATE
+    GROUP
+  }
+
+  type MyConversationsResponse {
+    success: Boolean!
+    message: String!
+    statusCode: Int!
+    conversations: [Conversation!]!
+  }
+
+  type MessagesResponse {
+    success: Boolean!
+    message: String!
+    statusCode: Int!
+    messages: [Message!]!
+  }
+
+  type SendMessageResponse {
+    success: Boolean!
+    message: String!
+    statusCode: Int!
+    messageData: Message
+  }
+
   extend type Query {
-    fetchMessages(conversationId: ID!): [Message!]!
-    myConversations: [Conversation!]!
+    myConversations: MyConversationsResponse!
+    getMessages(conversationId: ID!, limit: Int, offset: Int): MessagesResponse!
+    searchConversation(
+      query: String!
+      limit: Int = 20
+      offset: Int = 0
+    ): MyConversationsResponse!
   }
 
   extend type Mutation {
-    fetchConversation(receiverId: ID!): Conversation!
-    createConversation(receiverId: ID!): Conversation!
+    sendMessage(
+      recipientId: ID!
+      message: String!
+      messageType: String!
+    ): SendMessageResponse!
   }
 `;
 
 export const userConversationResolvers = {
   Query: {
-    fetchMessages: conversationResolvers.Query.fetchMessages,
-    myConversations: conversationResolvers.Query.myConversations, // <-- Add this line
+    myConversations: conversationResolvers.Query.myConversations,
+    getMessages: conversationResolvers.Query.getMessages,
+    searchConversation: conversationResolvers.Query.searchConversation,
   },
   Mutation: {
-    fetchConversation: conversationResolvers.Mutation.fetchConversation,
-    createConversation: conversationResolvers.Mutation.createConversation,
+    sendMessage: conversationResolvers.Mutation.sendMessage,
   },
   Conversation: conversationResolvers.Conversation,
+  Message: conversationResolvers.Message,
 };

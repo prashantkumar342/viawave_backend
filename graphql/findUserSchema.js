@@ -17,15 +17,12 @@ export const findUserTypeDefs = gql`
     coverImage: String
     isVerified: Boolean
     email_verified: Boolean
-    totalLinks:Int
+    totalLinks: Int
     sentLinks: [ID!]
     receivedLinks: [ID!]
     links: [ID!]
     role: String
     lastLogin: String
-    googleId: String
-    provider: String
-    token: String
     createdAt: String
     updatedAt: String
   }

@@ -1,26 +1,46 @@
 // models/conversationModel.ts
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const conversationSchema = new mongoose.Schema(
   {
+    type: {
+      type: String,
+      enum: ['PRIVATE', 'GROUP'],
+      default: 'PRIVATE',
+    },
     participants: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: 'User',
         required: true,
       },
     ],
-    isGroup: {
-      type: Boolean,
-      default: false,
-    },
-    name: String, // Only used for group chats
+
     lastMessage: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Message",
+      ref: 'Message',
+    },
+
+    // For group conversations
+    groupName: {
+      type: String,
+    },
+    groupAvatar: {
+      type: String,
+    },
+
+    // Track unread count per user
+    unreadCounts: {
+      type: Map,
+      of: Number, // { userId: count }
+      default: {},
     },
   },
   { timestamps: true }
 );
 
-export const Conversation = mongoose.model("Conversation", conversationSchema);
+// Indexes
+conversationSchema.index({ participants: 1 }); // optimize queries for user's conversations
+conversationSchema.index({ updatedAt: -1 });   // for sorting by activity
+
+export const Conversation = mongoose.model('Conversation', conversationSchema);
