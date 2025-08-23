@@ -18,6 +18,7 @@ export const userConversationTypeDefs = gql`
     attachments: [Attachment!]!
     seenBy: [User!]!
     deletedFor: [User!]!
+    isSenderYou: Boolean!
     createdAt: String!
     updatedAt: String!
   }
@@ -77,6 +78,10 @@ export const userConversationTypeDefs = gql`
     ): MyConversationsResponse!
   }
 
+  extend type Subscription {
+    messageReceived(conversationId: ID!): Message!
+  }
+
   extend type Mutation {
     sendMessage(
       recipientId: ID!
@@ -94,6 +99,9 @@ export const userConversationResolvers = {
   },
   Mutation: {
     sendMessage: conversationResolvers.Mutation.sendMessage,
+  },
+  Subscription: {
+    messageReceived: conversationResolvers.Subscription.messageReceived,
   },
   Conversation: conversationResolvers.Conversation,
   Message: conversationResolvers.Message,

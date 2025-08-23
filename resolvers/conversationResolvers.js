@@ -2,7 +2,11 @@ import { Conversation as ConversationModel } from '../models/conversationModel.j
 import { Message as MessageModel } from '../models/messageModel.js';
 import { User as UserModel } from '../models/userModel.js';
 import { Logger } from '../utils/logger.js';
+import { pubsub } from '../utils/pubsub.js';
 import { requireAuth } from '../utils/requireAuth.js';
+
+const messageTopic = (conversationId) =>
+  `MESSAGE_RECEIVED_${String(conversationId)}`;
 
 export const conversationResolvers = {
   Query: {
@@ -68,7 +72,7 @@ export const conversationResolvers = {
           conversation: conversationId,
           deletedFor: { $ne: user._id },
         })
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: 1 })
           .skip(offset)
           .limit(limit)
           .populate({
@@ -77,9 +81,11 @@ export const conversationResolvers = {
           });
 
         // Return in ascending chronological order
-        const data = messages
-          .reverse()
-          .map((m) => ({ ...m.toObject(), id: m._id }));
+        const data = messages.reverse().map((m) => ({
+          ...m.toObject(),
+          id: m._id,
+          isSenderYou: String(m.sender._id || m.sender) === String(user._id),
+        }));
         return {
           success: true,
           message: 'Messages fetched successfully',
@@ -279,11 +285,36 @@ export const conversationResolvers = {
           select: 'username email profilePicture',
         });
 
+        // Prepare message data with isSenderYou field for response
+        const responseMessageData = {
+          ...populated.toObject(),
+          id: populated._id,
+          isSenderYou: true,
+        };
+
+        // Emit subscription event for real-time updates
+        // Include isSenderYou field for each participant
+        const subscriptionMessageData = {
+          ...populated.toObject(),
+          id: populated._id,
+        };
+
+        // Emit to all participants with their respective isSenderYou value
+        for (const participantId of conversation.participants) {
+          const isSenderYou = String(participantId) === String(user._id);
+          pubsub.publish(messageTopic(conversation._id), {
+            messageReceived: {
+              ...subscriptionMessageData,
+              isSenderYou,
+            },
+          });
+        }
+
         return {
           success: true,
           message: 'Message sent successfully',
           statusCode: 201,
-          messageData: { ...populated.toObject(), id: populated._id },
+          messageData: responseMessageData,
         };
       } catch (err) {
         Logger.error(`⌐ sendMessage error: ${err?.message || err}`);
@@ -344,7 +375,7 @@ export const conversationResolvers = {
         return obj;
       }
       const user = await UserModel.findById(otherId).select(
-        'username email profilePicture fullName isVerified '
+        'username email profilePicture fullName isVerified gender'
       );
       const obj = user?.toObject ? user.toObject() : user;
       if (obj && !obj.id) obj.id = obj._id?.toString?.() || String(obj._id);
@@ -426,6 +457,14 @@ export const conversationResolvers = {
         if (!obj.id) obj.id = obj._id?.toString?.() || String(obj._id);
         return obj;
       });
+    },
+  },
+
+  Subscription: {
+    messageReceived: {
+      subscribe: (_, { conversationId }) => {
+        return pubsub.asyncIterableIterator(messageTopic(conversationId));
+      },
     },
   },
 };
