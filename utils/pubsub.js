@@ -1,6 +1,6 @@
 import { PubSub } from 'graphql-subscriptions';
 
-import { Logger } from './logger';
+import { Logger } from './logger.js';
 
 export const pubsub = new PubSub();
 
