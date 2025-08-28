@@ -1,17 +1,18 @@
 // backend/resolvers/userAuth.js
-import { User as userModel } from '../models/userModel.js';
+import { OAuth2Client } from 'google-auth-library';
+
+import { sendMail } from '../config/mailConfig.js';
 import { Otp as otpModel } from '../models/otpMode.js';
+import { User as userModel } from '../models/userModel.js';
+import { otpMailTemplate } from '../templates/otpMailTemplate.js';
 import generateOTP from '../utils/generateOtp.js';
 import generateToken from '../utils/generateToken.js';
-import { otpMailTemplate } from '../templates/otpMailTemplate.js';
-import { sendMail } from '../config/mailConfig.js';
-import { OAuth2Client } from "google-auth-library";
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID_WEB);
 
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID_WEB);
 
 export const googleAuth = async (_, { idToken }, { res }) => {
   try {
-    console.log("google Auth")
+    console.log('google Auth');
     // 1. Verify token
     const audiences = [
       process.env.GOOGLE_CLIENT_ID_WEB,
@@ -45,7 +46,7 @@ export const googleAuth = async (_, { idToken }, { res }) => {
         provider: 'google',
         email_verified: true,
         firstname: given_name,
-        lastname: family_name
+        lastname: family_name,
       });
     } else if (!user.googleId) {
       // 5. Link Google to existing email-based user (optional)
@@ -63,25 +64,25 @@ export const googleAuth = async (_, { idToken }, { res }) => {
 
     // 7. Set cookie for web users
     if (res) {
-      res.cookie("waveToken", token, {
+      res.cookie('waveToken', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Strict",
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'Strict',
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
     }
     return {
       success: true,
-      message: "Google login successful",
+      message: 'Google login successful',
       statusCode: 200,
       token,
       userData: user,
     };
   } catch (error) {
-    console.error("Google OAuth Error:", error);
+    console.error('Google OAuth Error:', error);
     return {
       success: false,
-      message: "Google login failed",
+      message: 'Google login failed',
       statusCode: 500,
     };
   }
@@ -91,7 +92,11 @@ export const sendOTP = async (_, { email }) => {
   try {
     const existingUser = await userModel.findOne({ email: email });
     if (existingUser) {
-      return { success: false, message: "Email already exists", statusCode: 409 };
+      return {
+        success: false,
+        message: 'Email already exists',
+        statusCode: 409,
+      };
     }
 
     const OTP = generateOTP();
@@ -104,21 +109,21 @@ export const sendOTP = async (_, { email }) => {
 
     await sendMail({
       to: email,
-      subject: "Your ViaWave OTP Code",
-      html: otpMailTemplate(OTP)
+      subject: 'Your ViaWave OTP Code',
+      html: otpMailTemplate(OTP),
     });
 
     return {
       OTP: OTP.toString(),
       success: true,
-      message: "OTP sent successfully"
+      message: 'OTP sent successfully',
     };
   } catch (error) {
     console.error('Send OTP Error:', error);
     return {
       success: false,
-      message: "Failed to send OTP",
-      statusCode: 500
+      message: 'Failed to send OTP',
+      statusCode: 500,
     };
   }
 };
@@ -126,14 +131,14 @@ export const sendOTP = async (_, { email }) => {
 export const register = async (_, { username, email, password, otp }) => {
   try {
     const existingUser = await userModel.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email }, { username }],
     });
 
     if (existingUser) {
       return {
         success: false,
-        message: "Username or email already exists",
-        statusCode: 409
+        message: 'Username or email already exists',
+        statusCode: 409,
       };
     }
 
@@ -141,16 +146,16 @@ export const register = async (_, { username, email, password, otp }) => {
     if (!verifyOTP) {
       return {
         success: false,
-        message: "OTP not found",
-        statusCode: 404
+        message: 'OTP not found',
+        statusCode: 404,
       };
     }
 
     if (verifyOTP.otp !== otp) {
       return {
         success: false,
-        message: "Invalid OTP",
-        statusCode: 401
+        message: 'Invalid OTP',
+        statusCode: 401,
       };
     }
 
@@ -159,7 +164,7 @@ export const register = async (_, { username, email, password, otp }) => {
       email,
       password,
       provider: 'local',
-      email_verified: true
+      email_verified: true,
     });
 
     await newUser.save();
@@ -168,15 +173,15 @@ export const register = async (_, { username, email, password, otp }) => {
     return {
       user: newUser,
       success: true,
-      message: "Registration successful",
-      statusCode: 201
+      message: 'Registration successful',
+      statusCode: 201,
     };
   } catch (error) {
     console.error('Registration Error:', error);
     return {
       success: false,
       message: `Registration failed: ${error.message}`,
-      statusCode: 500
+      statusCode: 500,
     };
   }
 };
@@ -188,7 +193,7 @@ export const login = async (_, { email, password }, { res }) => {
     if (!user || !(await user.comparePassword(password))) {
       return {
         success: false,
-        message: "Invalid credentials",
+        message: 'Invalid credentials',
         statusCode: 401,
       };
     }
@@ -197,10 +202,10 @@ export const login = async (_, { email, password }, { res }) => {
 
     // Set cookie for web clients
     if (res) {
-      res.cookie("waveToken", token, {
+      res.cookie('waveToken', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Strict",
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'Strict',
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
     }
@@ -208,7 +213,7 @@ export const login = async (_, { email, password }, { res }) => {
     // Update last login
     await userModel.findByIdAndUpdate(user._id, {
       lastLogin: new Date(),
-      token: token
+      token: token,
     });
 
     const userObj = user.toObject();
@@ -217,7 +222,7 @@ export const login = async (_, { email, password }, { res }) => {
 
     return {
       success: true,
-      message: "Login successful",
+      message: 'Login successful',
       statusCode: 200,
       token: token,
       userData: userObj,
@@ -226,7 +231,121 @@ export const login = async (_, { email, password }, { res }) => {
     console.error('Login Error:', error);
     return {
       success: false,
-      message: "Login failed",
+      message: 'Login failed',
+      statusCode: 500,
+    };
+  }
+};
+
+export const editProfile = async (
+  _,
+  { username, fullName, dob, gender, bio, profilePicture, profilePictureFile },
+  context
+) => {
+  try {
+    const req = context?.req;
+    if (!req) {
+      return { success: false, message: 'Unauthorized', statusCode: 401 };
+    }
+
+    // Resolve current user either from context or token
+    let currentUser = req.user || null;
+    if (!currentUser) {
+      const { requireAuth } = await import('../utils/requireAuth.js');
+      currentUser = await requireAuth(req);
+    }
+
+    // Handle file upload if provided
+    let uploadedFilePath = null;
+    if (profilePictureFile && profilePictureFile.startsWith('data:image/')) {
+      try {
+        // Extract file data
+        const matches = profilePictureFile.match(/^data:([^;]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const mimeType = matches[1];
+          const base64Data = matches[2];
+          const buffer = Buffer.from(base64Data, 'base64');
+
+          // Generate filename using username or current user's username
+          const fileExtension = mimeType.split('/')[1];
+          const fileName = `${currentUser.username}_${Date.now()}.${fileExtension}`;
+
+          // Import fs and path for file operations
+          const fs = await import('fs');
+          const path = await import('path');
+
+          // Ensure directory exists
+          const uploadDir = path.default.join(
+            process.cwd(),
+            'public',
+            'uploads',
+            'profiles'
+          );
+          if (!fs.default.existsSync(uploadDir)) {
+            fs.default.mkdirSync(uploadDir, { recursive: true });
+          }
+
+          // Write file
+          const filePath = path.default.join(uploadDir, fileName);
+          fs.default.writeFileSync(filePath, buffer);
+
+          // Set the uploaded file path
+          uploadedFilePath = `/uploads/profiles/${fileName}`;
+        }
+      } catch (error) {
+        console.error('File upload error:', error);
+        return {
+          success: false,
+          message: 'Failed to upload profile picture',
+          statusCode: 500,
+        };
+      }
+    }
+
+    // Only allow specific fields: username, fullName, dob, gender, bio, profilePicture
+    const update = {};
+    if (username !== undefined) update.username = username;
+    if (fullName !== undefined) update.fullName = fullName;
+    if (dob !== undefined) {
+      const parsedDob = dob ? new Date(dob) : null;
+      if (parsedDob && !isNaN(parsedDob.getTime())) {
+        update.dob = parsedDob;
+      }
+    }
+    if (gender !== undefined) update.gender = gender;
+    if (bio !== undefined) update.bio = bio;
+    if (profilePicture !== undefined) update.profilePicture = profilePicture;
+    if (uploadedFilePath) update.profilePicture = uploadedFilePath;
+
+    if (Object.keys(update).length === 0) {
+      return {
+        success: false,
+        message: 'No allowed fields to update',
+        statusCode: 400,
+      };
+    }
+
+    const updatedUser = await userModel.findByIdAndUpdate(
+      currentUser._id,
+      { $set: update },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return { success: false, message: 'User not found', statusCode: 404 };
+    }
+
+    return {
+      success: true,
+      message: 'Profile updated',
+      statusCode: 200,
+      user: updatedUser,
+    };
+  } catch (error) {
+    console.error('Edit profile error:', error);
+    return {
+      success: false,
+      message: 'Failed to update profile',
       statusCode: 500,
     };
   }

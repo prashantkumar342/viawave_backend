@@ -1,5 +1,4 @@
 import { gql } from 'apollo-server-express';
-
 import { finUserResolvers } from '../resolvers/findUser.js';
 
 export const findUserTypeDefs = gql`
@@ -25,6 +24,7 @@ export const findUserTypeDefs = gql`
     lastLogin: String
     createdAt: String
     updatedAt: String
+    ourConversation: ID  # Added this field
   }
 
   type UserSearchResult {
@@ -57,4 +57,4 @@ export const findUserTypeDefs = gql`
   }
 `;
 
-export { finUserResolvers as findUserResolvers };
+export { finUserResolvers as findUserResolvers }; 

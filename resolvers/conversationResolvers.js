@@ -51,7 +51,7 @@ export const conversationResolvers = {
     // Get messages for a specific conversation
     getMessages: async (
       _,
-      { conversationId, limit = 30, offset = 0 },
+      { conversationId, limit, offset },
       context
     ) => {
       try {
@@ -72,7 +72,7 @@ export const conversationResolvers = {
           conversation: conversationId,
           deletedFor: { $ne: user._id },
         })
-          .sort({ createdAt: 1 })
+          .sort({ createdAt: -1 }) // Keep newest first
           .skip(offset)
           .limit(limit)
           .populate({
@@ -80,17 +80,18 @@ export const conversationResolvers = {
             select: 'username email profilePicture',
           });
 
-        // Return in ascending chronological order
-        const data = messages.reverse().map((m) => ({
+        // Send newest first (no reverse needed)
+        const data = messages.map((m) => ({
           ...m.toObject(),
           id: m._id,
           isSenderYou: String(m.sender._id || m.sender) === String(user._id),
         }));
+
         return {
           success: true,
           message: 'Messages fetched successfully',
           statusCode: 200,
-          messages: data,
+          messages: data, // Newest first array
         };
       } catch (err) {
         Logger.error(`⌐ getMessages error: ${err?.message || err}`);

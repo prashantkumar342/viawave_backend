@@ -15,6 +15,7 @@ import { WebSocketServer } from 'ws';
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
+import { handleUploadError, uploadSingle } from './middlewares/upload.js';
 import { User } from './models/userModel.js';
 import { Logger } from './utils/logger.js';
 import { socketIoServer } from './ws/socket.js';
@@ -27,7 +28,7 @@ dotenv.config({ path: './.env' });
 // ----------------------
 // Error Handlers
 // ----------------------
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   Logger.error('❌ Unhandled Rejection:', reason);
   process.exit(1);
 });
@@ -90,6 +91,12 @@ async function startServer() {
     app.use(express.json());
     app.use(cookieParser());
 
+    // Serve static files from public directory
+    app.use(
+      '/uploads',
+      express.static(path.join(__dirname, 'public', 'uploads'))
+    );
+
     // GraphQL Schema
     const schema = makeExecutableSchema({ typeDefs, resolvers });
 
@@ -132,6 +139,41 @@ async function startServer() {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
       });
+    });
+
+    // File upload route
+    app.post('/upload', uploadSingle, handleUploadError, (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: 'No file uploaded',
+            statusCode: 400,
+          });
+        }
+
+        const filePath = `/uploads/${req.body.folderName || 'default'}/${req.file.filename}`;
+
+        res.status(200).json({
+          success: true,
+          message: 'File uploaded successfully',
+          statusCode: 200,
+          data: {
+            filename: req.file.filename,
+            originalName: req.file.originalname,
+            path: filePath,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+          },
+        });
+      } catch (error) {
+        Logger.error('Upload error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Upload failed',
+          statusCode: 500,
+        });
+      }
     });
 
     // Start Listening

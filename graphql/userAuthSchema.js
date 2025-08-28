@@ -1,9 +1,11 @@
 import { gql } from 'apollo-server-express';
+
 import {
-  register,
+  editProfile,
+  googleAuth,
   login,
+  register,
   sendOTP,
-  googleAuth
 } from '../resolvers/userAuth.js';
 
 export const userTypeDefs = gql`
@@ -16,9 +18,9 @@ export const userTypeDefs = gql`
     bio: String
     profilePicture: String
     isVerified: Boolean
-    sentLinks:[ID]
-    receivedLinks:[ID]
-    links:[ID]
+    sentLinks: [ID]
+    receivedLinks: [ID]
+    links: [ID]
     role: String
     provider: String
     googleId: String
@@ -26,6 +28,14 @@ export const userTypeDefs = gql`
     updatedAt: String
   }
 
+  input EditProfileInput {
+    username: String
+    fullName: String
+    dob: String
+    gender: String
+    bio: String
+    profilePictureFile: String # Base64 encoded file
+  }
 
   type OTPResponse {
     success: Boolean!
@@ -48,24 +58,43 @@ export const userTypeDefs = gql`
     userData: User
   }
   type AuthResponse {
-  success: Boolean!
-  message: String!
-  statusCode: Int!
-  token: String
-  userData: User
-}
+    success: Boolean!
+    message: String!
+    statusCode: Int!
+    token: String
+    userData: User
+  }
 
+  type editProfileResponse {
+    success: Boolean!
+    message: String!
+    statusCode: Int!
+    user: User
+  }
 
   extend type Query {
     _user: String
   }
 
   extend type Mutation {
-    register(username: String!, email: String!, password: String!, otp: Int!): registerResponse!
+    register(
+      username: String!
+      email: String!
+      password: String!
+      otp: Int!
+    ): registerResponse!
     login(email: String!, password: String!): loginResponse!
     googleAuth(idToken: String!): AuthResponse!
     sendOTP(email: String!): OTPResponse
-   
+    editProfile(
+      username: String
+      fullName: String
+      dob: String
+      gender: String
+      bio: String
+      profilePicture: String
+      profilePictureFile: String
+    ): editProfileResponse!
   }
 `;
 
@@ -74,6 +103,7 @@ export const userResolvers = {
     register,
     login,
     sendOTP,
-    googleAuth
+    googleAuth,
+    editProfile,
   },
 };
