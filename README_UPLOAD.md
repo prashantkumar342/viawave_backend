@@ -152,3 +152,22 @@ const result = await editProfile({
 - Only authenticated users can upload files
 - Files are stored in a controlled directory structure
 - Original filenames are not preserved for security
+- Previous profile pictures are automatically deleted when new ones are uploaded
+- Orphaned files can be cleaned up using the cleanup utility
+
+## File Management
+
+### Automatic Cleanup
+
+- **Profile Pictures**: Previous profile pictures are automatically deleted when a user uploads a new one
+- **Orphaned Files**: Utility function available to clean up files that are no longer referenced in the database
+
+### Manual Cleanup
+
+You can run the cleanup utility to remove orphaned profile pictures:
+
+```javascript
+import { cleanupOrphanedProfilePictures } from './middlewares/upload.js';
+
+await cleanupOrphanedProfilePictures();
+```

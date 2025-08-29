@@ -285,7 +285,34 @@ export const editProfile = async (
             fs.default.mkdirSync(uploadDir, { recursive: true });
           }
 
-          // Write file
+          // Delete previous profile picture if it exists
+          if (
+            currentUser.profilePicture &&
+            currentUser.profilePicture.startsWith('/uploads/')
+          ) {
+            try {
+              const previousImagePath = path.default.join(
+                process.cwd(),
+                'public',
+                currentUser.profilePicture
+              );
+              if (fs.default.existsSync(previousImagePath)) {
+                fs.default.unlinkSync(previousImagePath);
+                console.log(
+                  'Previous profile picture deleted:',
+                  previousImagePath
+                );
+              }
+            } catch (deleteError) {
+              console.warn(
+                'Failed to delete previous profile picture:',
+                deleteError
+              );
+              // Continue with upload even if deletion fails
+            }
+          }
+
+          // Write new file
           const filePath = path.default.join(uploadDir, fileName);
           fs.default.writeFileSync(filePath, buffer);
 

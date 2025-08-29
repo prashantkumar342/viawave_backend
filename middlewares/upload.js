@@ -92,3 +92,51 @@ export const getFilePath = (filename, folderName = 'default') => {
 export const getFullPath = (filename, folderName = 'default') => {
   return path.join(process.cwd(), 'public', 'uploads', folderName, filename);
 };
+
+// Helper function to delete previous profile picture
+export const deletePreviousProfilePicture = async (userProfilePicture) => {
+  try {
+    if (userProfilePicture && userProfilePicture.startsWith('/uploads/')) {
+      const fullPath = path.join(process.cwd(), 'public', userProfilePicture);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+        console.log('Previous profile picture deleted:', fullPath);
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.warn('Failed to delete previous profile picture:', error);
+    return false;
+  }
+};
+
+// Helper function to clean up orphaned profile pictures
+export const cleanupOrphanedProfilePictures = async () => {
+  try {
+    const profilesDir = path.join(
+      process.cwd(),
+      'public',
+      'uploads',
+      'profiles'
+    );
+    if (!fs.existsSync(profilesDir)) return;
+
+    const files = fs.readdirSync(profilesDir);
+    const { User } = await import('../models/userModel.js');
+
+    for (const file of files) {
+      const filePath = `/uploads/profiles/${file}`;
+      const user = await User.findOne({ profilePicture: filePath });
+
+      if (!user) {
+        // File is orphaned, delete it
+        const fullPath = path.join(profilesDir, file);
+        fs.unlinkSync(fullPath);
+        console.log('Deleted orphaned profile picture:', fullPath);
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to cleanup orphaned profile pictures:', error);
+  }
+};

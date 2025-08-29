@@ -15,7 +15,11 @@ import { WebSocketServer } from 'ws';
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
-import { handleUploadError, uploadSingle } from './middlewares/upload.js';
+import {
+  deletePreviousProfilePicture,
+  handleUploadError,
+  uploadSingle,
+} from './middlewares/upload.js';
 import { User } from './models/userModel.js';
 import { Logger } from './utils/logger.js';
 import { socketIoServer } from './ws/socket.js';
@@ -142,7 +146,7 @@ async function startServer() {
     });
 
     // File upload route
-    app.post('/upload', uploadSingle, handleUploadError, (req, res) => {
+    app.post('/upload', uploadSingle, handleUploadError, async (req, res) => {
       try {
         if (!req.file) {
           return res.status(400).json({
@@ -153,6 +157,19 @@ async function startServer() {
         }
 
         const filePath = `/uploads/${req.body.folderName || 'default'}/${req.file.filename}`;
+
+        // If this is a profile picture upload, delete the previous one
+        if (req.body.folderName === 'profiles' && req.body.userId) {
+          try {
+            const user = await User.findById(req.body.userId);
+            if (user && user.profilePicture) {
+              await deletePreviousProfilePicture(user.profilePicture);
+            }
+          } catch (error) {
+            Logger.warn('Failed to delete previous profile picture:', error);
+            // Continue with upload even if deletion fails
+          }
+        }
 
         res.status(200).json({
           success: true,

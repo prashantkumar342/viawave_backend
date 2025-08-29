@@ -11,6 +11,8 @@ import {
   userLinkRequestTypeDefs,
 } from './userLinksSchema.js';
 
+import { userPostResolvers, userPostTypeDefs } from './postSchema.js';
+
 const rootTypeDefs = `#graphql
 type Query {
   _empty:String
@@ -32,10 +34,12 @@ export const typeDefs = mergeTypeDefs([
   findUserTypeDefs,
   userConversationTypeDefs,
   userLinkRequestTypeDefs,
+  userPostTypeDefs
 ]);
 export const resolvers = mergeResolvers([
   userResolvers,
   findUserResolvers,
   userConversationResolvers,
   userLinkRequestResolvers,
+  userPostResolvers
 ]);
