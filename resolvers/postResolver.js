@@ -1,4 +1,4 @@
-import { ArticlePost } from '../models/postModel.js';
+import { ArticlePost, ImagePost, VideoPost } from '../models/postModel.js';
 import { requireAuth } from '../utils/requireAuth.js';
 import { Logger } from '../utils/logger.js';
 
@@ -132,4 +132,116 @@ export const postResolvers = {
       }
     }
   },
+  Query: {
+
+    getMyPosts: async (_, { offset = 0, limit = 10 }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        // Fetch all post types by this user
+        const [articles, images, videos] = await Promise.all([
+          ArticlePost.find({ author: user._id })
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+          ImagePost.find({ author: user._id })
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+          VideoPost.find({ author: user._id })
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+        ]);
+
+        // Merge and sort by createdAt
+        let posts = [...articles, ...images, ...videos]
+          .map(post => {
+            const obj = post.toObject();
+            return {
+              ...obj,
+              id: post._id.toString(),
+              totalLikes: obj.likes ? obj.likes.length : 0,
+              totalComments: obj.comments ? obj.comments.length : 0,
+            };
+          })
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Apply offset + limit manually since we merged arrays
+        posts = posts.slice(offset, offset + limit);
+
+        return {
+          success: true,
+          message: 'Posts fetched successfully',
+          statusCode: 200,
+          posts,
+        };
+      } catch (error) {
+        Logger.error('Get posts error:', error);
+        return {
+          success: false,
+          message: 'Failed to fetch posts',
+          statusCode: 500,
+          posts: [],
+        };
+      }
+    },
+
+    getPostById: async (_, { postId }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        // Try to find post in each collection
+        const post =
+          (await ArticlePost.findById(postId)
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')) ||
+          (await ImagePost.findById(postId)
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')) ||
+          (await VideoPost.findById(postId)
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user'));
+
+        if (!post) {
+          return {
+            success: false,
+            message: 'Post not found',
+            statusCode: 404,
+            post: null,
+          };
+        }
+
+        const obj = post.toObject();
+
+        return {
+          success: true,
+          message: 'Post fetched successfully',
+          statusCode: 200,
+          post: {
+            ...obj,
+            id: post._id.toString(),
+            totalLikes: obj.likes ? obj.likes.length : 0,
+            totalComments: obj.comments ? obj.comments.length : 0,
+          },
+        };
+      } catch (error) {
+        Logger.error('Get post by ID error:', error);
+        return {
+          success: false,
+          message: 'Failed to fetch post',
+          statusCode: 500,
+          post: null,
+        };
+      }
+    },
+
+
+  }
 };

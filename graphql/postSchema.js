@@ -5,42 +5,49 @@ export const userPostTypeDefs = gql`
   union Post = ArticlePost | ImagePost | VideoPost
 
   type ArticlePost {
-    id: ID!
-    author: User!
-    caption: String
-    tags: [String!]!
-    likes: [User!]!
-    comments: [Comment!]!
-    title: String!
-    content: String!  # This will store either text content or file path
-    createdAt: String!
-    updatedAt: String!
-    contentFile: String  # Optional: if you want to separate file reference
-  }
+  id: ID!
+  author: User!
+  caption: String
+  tags: [String!]!
+  likes: [User!]!
+  comments: [Comment!]!
+  title: String!
+  content: String!
+  createdAt: String!
+  updatedAt: String!
+  contentFile: String
+  totalLikes: Int!
+  totalComments: Int!
+}
 
-  type ImagePost {
-    id: ID!
-    author: User!
-    caption: String
-    tags: [String!]!
-    likes: [User!]!
-    comments: [Comment!]!
-    imageUrl: String!
-    createdAt: String!
-    updatedAt: String!
-  }
+type ImagePost {
+  id: ID!
+  author: User!
+  caption: String
+  tags: [String!]!
+  likes: [User!]!
+  comments: [Comment!]!
+  imageUrl: String!
+  createdAt: String!
+  updatedAt: String!
+  totalLikes: Int!
+  totalComments: Int!
+}
 
-  type VideoPost {
-    id: ID!
-    author: User!
-    caption: String
-    tags: [String!]!
-    likes: [User!]!
-    comments: [Comment!]!
-    videoUrl: String!
-    createdAt: String!
-    updatedAt: String!
-  }
+type VideoPost {
+  id: ID!
+  author: User!
+  caption: String
+  tags: [String!]!
+  likes: [User!]!
+  comments: [Comment!]!
+  videoUrl: String!
+  createdAt: String!
+  updatedAt: String!
+  totalLikes: Int!
+  totalComments: Int!
+}
+
 
   type Comment {
     id: ID!
@@ -64,7 +71,7 @@ export const userPostTypeDefs = gql`
   }
 
   extend type Query {
-    getPosts(limit: Int = 20, offset: Int = 0): PostsResponse!
+    getPosts(limit: Int, offset: Int): PostsResponse!
     getPostById(postId: ID!): PostResponse!
   }
 
@@ -92,10 +99,10 @@ export const userPostTypeDefs = gql`
 `;
 
 export const userPostResolvers = {
-  // Query: {
-  // getPosts: postResolvers.Query.getPosts,
-  // getPostById: postResolvers.Query.getPostById,
-  // },
+  Query: {
+    getPosts: postResolvers.Query.getMyPosts,
+    getPostById: postResolvers.Query.getPostById,
+  },
   Mutation: {
     createArticlePost: postResolvers.Mutation.createArticlePost,
     // createImagePost: postResolvers.Mutation.createImagePost,
