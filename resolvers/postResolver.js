@@ -1,6 +1,7 @@
 import { ArticlePost, ImagePost, VideoPost } from '../models/postModel.js';
 import { requireAuth } from '../utils/requireAuth.js';
 import { Logger } from '../utils/logger.js';
+import { User } from '../models/userModel.js';
 
 export const postResolvers = {
   Mutation: {
@@ -227,10 +228,18 @@ export const postResolvers = {
           post: {
             ...obj,
             id: post._id.toString(),
+            author: obj.author
+              ? {
+                ...obj.author,
+                id: obj.author._id.toString(),
+              }
+              : null,
             totalLikes: obj.likes ? obj.likes.length : 0,
             totalComments: obj.comments ? obj.comments.length : 0,
           },
         };
+
+
       } catch (error) {
         Logger.error('Get post by ID error:', error);
         return {
@@ -238,6 +247,137 @@ export const postResolvers = {
           message: 'Failed to fetch post',
           statusCode: 500,
           post: null,
+        };
+      }
+    },
+
+    getUserPosts: async (_, { offset = 0, limit = 10, userId }, context) => {
+      try {
+
+        const user = await User.findById(userId);
+        if (!user) {
+          return {
+            success: false,
+            message: 'User not found',
+            statusCode: 404,
+            posts: [],
+          };
+        }
+
+        // Fetch all post types by this user
+        const [articles, images, videos] = await Promise.all([
+          ArticlePost.find({ author: user._id })
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+          ImagePost.find({ author: user._id })
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+          VideoPost.find({ author: user._id })
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+        ]);
+
+        // Merge and sort by createdAt
+        let posts = [...articles, ...images, ...videos]
+          .map(post => {
+            const obj = post.toObject();
+            return {
+              ...obj,
+              id: post._id.toString(),
+              author: obj.author
+                ? {
+                  ...obj.author,
+                  id: obj.author._id.toString(),
+                }
+                : null,
+              totalLikes: obj.likes ? obj.likes.length : 0,
+              totalComments: obj.comments ? obj.comments.length : 0,
+            };
+          })
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Apply offset + limit manually since we merged arrays
+        posts = posts.slice(offset, offset + limit);
+
+        return {
+          success: true,
+          message: 'Posts fetched successfully',
+          statusCode: 200,
+          posts,
+        };
+      } catch (error) {
+        Logger.error('Get posts error:', error);
+        return {
+          success: false,
+          message: 'Failed to fetch posts',
+          statusCode: 500,
+          posts: [],
+        };
+      }
+    },
+    getHomeFeed: async (_, { offset = 0, limit = 10 }, context) => {
+      try {
+        // ✅ Fetch all post types (global feed)
+        const [articles, images, videos] = await Promise.all([
+          ArticlePost.find({})
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+          ImagePost.find({})
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+          VideoPost.find({})
+            .populate('author')
+            .populate('likes')
+            .populate('comments.user')
+            .sort({ createdAt: -1 }),
+        ]);
+
+        // ✅ Merge and normalize
+        let posts = [...articles, ...images, ...videos]
+          .map(post => {
+            const obj = post.toObject();
+            return {
+              ...obj,
+              id: post._id.toString(),
+              author: obj.author
+                ? {
+                  ...obj.author,
+                  id: obj.author._id.toString(),
+                }
+                : null,
+              totalLikes: obj.likes ? obj.likes.length : 0,
+              totalComments: obj.comments ? obj.comments.length : 0,
+            };
+          })
+
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // ✅ Apply offset + limit
+        posts = posts.slice(offset, offset + limit);
+
+        return {
+          success: true,
+          message: 'Home feed fetched successfully',
+          statusCode: 200,
+          posts,
+        };
+      } catch (error) {
+        Logger.error('Get home feed error:', error);
+        return {
+          success: false,
+          message: 'Failed to fetch home feed',
+          statusCode: 500,
+          posts: [],
         };
       }
     },

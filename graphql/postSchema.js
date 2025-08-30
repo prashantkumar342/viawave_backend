@@ -73,6 +73,8 @@ type VideoPost {
   extend type Query {
     getPosts(limit: Int, offset: Int): PostsResponse!
     getPostById(postId: ID!): PostResponse!
+    getUserPosts(userId: ID!, limit: Int, offset: Int): PostsResponse!
+    getHomeFeed(limit: Int, offset: Int): PostsResponse!
   }
 
   extend type Mutation {
@@ -102,6 +104,8 @@ export const userPostResolvers = {
   Query: {
     getPosts: postResolvers.Query.getMyPosts,
     getPostById: postResolvers.Query.getPostById,
+    getUserPosts: postResolvers.Query.getUserPosts,
+    getHomeFeed: postResolvers.Query.getHomeFeed,
   },
   Mutation: {
     createArticlePost: postResolvers.Mutation.createArticlePost,
