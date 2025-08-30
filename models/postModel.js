@@ -18,19 +18,8 @@ const PostSchema = new Schema({
     trim: true,
   },
   tags: [String], // optional hashtags or keywords
-  likes: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-    }
-  ],
-  comments: [
-    {
-      user: { type: Schema.Types.ObjectId, ref: 'User' },
-      text: String,
-      createdAt: { type: Date, default: Date.now }
-    }
-  ],
+  likesCount: { type: Number, default: 0 },
+  commentsCount: { type: Number, default: 0 },
 }, baseOptions);
 
 // Base Post Model

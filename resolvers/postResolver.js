@@ -2,6 +2,9 @@ import { ArticlePost, ImagePost, VideoPost } from '../models/postModel.js';
 import { requireAuth } from '../utils/requireAuth.js';
 import { Logger } from '../utils/logger.js';
 import { User } from '../models/userModel.js';
+import { Like } from '../models/likeModel.js';
+import { Comment } from '../models/commentModel.js';
+import { CommentLike } from '../models/commentLikeModel.js';
 
 export const postResolvers = {
   Mutation: {
@@ -15,7 +18,12 @@ export const postResolvers = {
           throw new Error("400: Title is required for an Article post");
         }
 
-        let uploadedFilePath = null;
+        // Validate that either content or contentFile is provided
+        if (!content && !contentFile) {
+          throw new Error("400: Either content text or content file is required for an Article post");
+        }
+
+        let finalContent = content || '';
 
         // Enhanced file handling with better error handling and validation
         if (contentFile && contentFile.startsWith("data:image/")) {
@@ -26,7 +34,7 @@ export const postResolvers = {
               const mimeType = matches[1];
               const base64Data = matches[2];
 
-              // Validate MIME type (optional but recommended)
+              // Validate MIME type
               const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
               if (!allowedMimeTypes.includes(mimeType)) {
                 return {
@@ -38,7 +46,7 @@ export const postResolvers = {
 
               const buffer = Buffer.from(base64Data, "base64");
 
-              // Optional: Add file size validation
+              // File size validation
               const maxFileSize = 5 * 1024 * 1024; // 5MB
               if (buffer.length > maxFileSize) {
                 return {
@@ -71,9 +79,9 @@ export const postResolvers = {
               const filePath = path.default.join(uploadDir, fileName);
               fs.default.writeFileSync(filePath, buffer);
 
-              // Set the uploaded file path
-              uploadedFilePath = `/uploads/articles/${fileName}`;
-              console.log('File uploaded successfully:', uploadedFilePath);
+              // Use uploaded file path as content
+              finalContent = `/uploads/articles/${fileName}`;
+              console.log('File uploaded successfully:', finalContent);
             } else {
               throw new Error('Invalid file format');
             }
@@ -91,27 +99,30 @@ export const postResolvers = {
         const article = await ArticlePost.create({
           author: user._id,
           title,
-          content: uploadedFilePath || content || '',  // Priority: uploaded file > content string > empty
+          content: finalContent,
           caption: caption || "",
           tags: tags || [],
-          likes: [],
-          comments: [],
         });
+
+        // Populate the created article
+        const populatedArticle = await ArticlePost.findById(article._id)
+          .populate('author');
 
         return {
           success: true,
           message: "Article post created successfully",
           statusCode: 201,
           post: {
-            ...article.toObject(),
-            id: article._id.toString(),
+            ...populatedArticle.toObject(),
+            id: populatedArticle._id.toString(),
             author: {
-              ...user.toObject(),
-              id: user._id.toString(),
-            }
+              ...populatedArticle.author.toObject(),
+              id: populatedArticle.author._id.toString(),
+            },
+            totalLikes: populatedArticle.likesCount || 0,
+            totalComments: populatedArticle.commentsCount || 0,
           },
         };
-
 
       } catch (error) {
         console.error('Create article error:', error);
@@ -131,10 +142,374 @@ export const postResolvers = {
           statusCode: 500,
         };
       }
+    },
+
+    // Create a new Image Post
+    createImagePost: async (_, { images, caption, tags }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        if (!images || images.length === 0) {
+          throw new Error("400: At least one image is required for an Image post");
+        }
+
+        const imagePost = await ImagePost.create({
+          author: user._id,
+          images,
+          caption: caption || "",
+          tags: tags || [],
+        });
+
+        const populatedImagePost = await ImagePost.findById(imagePost._id)
+          .populate('author');
+
+        return {
+          success: true,
+          message: "Image post created successfully",
+          statusCode: 201,
+          post: {
+            ...populatedImagePost.toObject(),
+            id: populatedImagePost._id.toString(),
+            author: {
+              ...populatedImagePost.author.toObject(),
+              id: populatedImagePost.author._id.toString(),
+            },
+            totalLikes: populatedImagePost.likesCount || 0,
+            totalComments: populatedImagePost.commentsCount || 0,
+          },
+        };
+
+      } catch (error) {
+        console.error('Create image post error:', error);
+
+        if (error.message.startsWith('400:')) {
+          return {
+            success: false,
+            message: error.message.substring(4),
+            statusCode: 400,
+          };
+        }
+
+        return {
+          success: false,
+          message: 'Failed to create image post',
+          statusCode: 500,
+        };
+      }
+    },
+
+    // Create a new Video Post
+    createVideoPost: async (_, { videoUrl, thumbnailUrl, caption, tags }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        if (!videoUrl) {
+          throw new Error("400: Video URL is required for a Video post");
+        }
+
+        const videoPost = await VideoPost.create({
+          author: user._id,
+          videoUrl,
+          thumbnailUrl: thumbnailUrl || "",
+          caption: caption || "",
+          tags: tags || [],
+        });
+
+        const populatedVideoPost = await VideoPost.findById(videoPost._id)
+          .populate('author');
+
+        return {
+          success: true,
+          message: "Video post created successfully",
+          statusCode: 201,
+          post: {
+            ...populatedVideoPost.toObject(),
+            id: populatedVideoPost._id.toString(),
+            author: {
+              ...populatedVideoPost.author.toObject(),
+              id: populatedVideoPost.author._id.toString(),
+            },
+            totalLikes: populatedVideoPost.likesCount || 0,
+            totalComments: populatedVideoPost.commentsCount || 0,
+          },
+        };
+
+      } catch (error) {
+        console.error('Create video post error:', error);
+
+        if (error.message.startsWith('400:')) {
+          return {
+            success: false,
+            message: error.message.substring(4),
+            statusCode: 400,
+          };
+        }
+
+        return {
+          success: false,
+          message: 'Failed to create video post',
+          statusCode: 500,
+        };
+      }
+    },
+
+    toggleLike: async (_, { postId }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        const existingLike = await Like.findOne({ post: postId, user: user._id });
+
+        let message = "";
+        if (existingLike) {
+          await existingLike.deleteOne();
+          // Update all possible post types
+          await Promise.all([
+            ArticlePost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } }),
+            ImagePost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } }),
+            VideoPost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } })
+          ]);
+          message = "Like removed";
+        } else {
+          await Like.create({ post: postId, user: user._id });
+          // Update all possible post types
+          await Promise.all([
+            ArticlePost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } }),
+            ImagePost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } }),
+            VideoPost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } })
+          ]);
+          message = "Post liked";
+        }
+
+        // Find the post in any collection
+        const post = await ArticlePost.findById(postId).populate("author") ||
+          await ImagePost.findById(postId).populate("author") ||
+          await VideoPost.findById(postId).populate("author");
+
+        if (!post) {
+          return {
+            success: false,
+            message: "Post not found",
+            statusCode: 404,
+            post: null
+          };
+        }
+
+        return {
+          success: true,
+          message,
+          statusCode: 200,
+          post: {
+            ...post.toObject(),
+            id: post._id.toString(),
+            author: {
+              ...post.author.toObject(),
+              id: post.author._id.toString(),
+            },
+            totalLikes: post.likesCount || 0,
+            totalComments: post.commentsCount || 0,
+          },
+        };
+      } catch (error) {
+        Logger.error("Toggle like error:", error);
+        return { success: false, message: "Failed to toggle like", statusCode: 500, post: null };
+      }
+    },
+
+    addComment: async (_, { postId, text, parentCommentId }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        await Comment.create({
+          post: postId,
+          user: user._id,
+          text,
+          parentComment: parentCommentId || null,
+        });
+
+        // Update comment count for all possible post types
+        await Promise.all([
+          ArticlePost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } }),
+          ImagePost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } }),
+          VideoPost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } })
+        ]);
+
+        // Find the post in any collection
+        const post = await ArticlePost.findById(postId).populate("author") ||
+          await ImagePost.findById(postId).populate("author") ||
+          await VideoPost.findById(postId).populate("author");
+
+        if (!post) {
+          return {
+            success: false,
+            message: "Post not found",
+            statusCode: 404,
+            post: null
+          };
+        }
+
+        return {
+          success: true,
+          message: "Comment added",
+          statusCode: 201,
+          post: {
+            ...post.toObject(),
+            id: post._id.toString(),
+            author: {
+              ...post.author.toObject(),
+              id: post.author._id.toString(),
+            },
+            totalLikes: post.likesCount || 0,
+            totalComments: post.commentsCount || 0,
+          },
+        };
+      } catch (error) {
+        Logger.error("Add comment error:", error);
+        return { success: false, message: "Failed to add comment", statusCode: 500, post: null };
+      }
+    },
+
+    editComment: async (_, { commentId, text }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        const comment = await Comment.findOne({ _id: commentId, user: user._id });
+        if (!comment) {
+          return { success: false, message: "Comment not found or unauthorized", statusCode: 404, post: null };
+        }
+
+        comment.text = text;
+        await comment.save();
+
+        // Find the post in any collection
+        const post = await ArticlePost.findById(comment.post).populate("author") ||
+          await ImagePost.findById(comment.post).populate("author") ||
+          await VideoPost.findById(comment.post).populate("author");
+
+        if (!post) {
+          return {
+            success: false,
+            message: "Post not found",
+            statusCode: 404,
+            post: null
+          };
+        }
+
+        return {
+          success: true,
+          message: "Comment updated",
+          statusCode: 200,
+          post: {
+            ...post.toObject(),
+            id: post._id.toString(),
+            author: {
+              ...post.author.toObject(),
+              id: post.author._id.toString(),
+            },
+            totalLikes: post.likesCount || 0,
+            totalComments: post.commentsCount || 0,
+          },
+        };
+      } catch (error) {
+        Logger.error("Edit comment error:", error);
+        return { success: false, message: "Failed to edit comment", statusCode: 500, post: null };
+      }
+    },
+
+    deleteComment: async (_, { commentId }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        const comment = await Comment.findOne({ _id: commentId, user: user._id });
+        if (!comment) {
+          return { success: false, message: "Comment not found or unauthorized", statusCode: 404, post: null };
+        }
+
+        await Comment.deleteOne({ _id: commentId });
+
+        // Update comment count for all possible post types
+        await Promise.all([
+          ArticlePost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } }),
+          ImagePost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } }),
+          VideoPost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } })
+        ]);
+
+        // Find the post in any collection
+        const post = await ArticlePost.findById(comment.post).populate("author") ||
+          await ImagePost.findById(comment.post).populate("author") ||
+          await VideoPost.findById(comment.post).populate("author");
+
+        if (!post) {
+          return {
+            success: false,
+            message: "Post not found",
+            statusCode: 404,
+            post: null
+          };
+        }
+
+        return {
+          success: true,
+          message: "Comment deleted",
+          statusCode: 200,
+          post: {
+            ...post.toObject(),
+            id: post._id.toString(),
+            author: {
+              ...post.author.toObject(),
+              id: post.author._id.toString(),
+            },
+            totalLikes: post.likesCount || 0,
+            totalComments: post.commentsCount || 0,
+          },
+        };
+      } catch (error) {
+        Logger.error("Delete comment error:", error);
+        return { success: false, message: "Failed to delete comment", statusCode: 500, post: null };
+      }
+    },
+
+    // Toggle like on a comment
+    toggleCommentLike: async (_, { commentId }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        const existingLike = await CommentLike.findOne({ comment: commentId, user: user._id });
+
+        let message = "";
+        if (existingLike) {
+          await existingLike.deleteOne();
+          message = "Comment like removed";
+        } else {
+          await CommentLike.create({ comment: commentId, user: user._id });
+          message = "Comment liked";
+        }
+
+        const comment = await Comment.findById(commentId).populate('user');
+        if (!comment) {
+          return {
+            success: false,
+            message: "Comment not found",
+            statusCode: 404,
+          };
+        }
+
+        return {
+          success: true,
+          message,
+          statusCode: 200,
+        };
+      } catch (error) {
+        Logger.error("Toggle comment like error:", error);
+        return {
+          success: false,
+          message: "Failed to toggle comment like",
+          statusCode: 500
+        };
+      }
     }
   },
-  Query: {
 
+  Query: {
     getMyPosts: async (_, { offset = 0, limit = 10 }, context) => {
       try {
         const user = await requireAuth(context.req);
@@ -143,18 +518,12 @@ export const postResolvers = {
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({ author: user._id })
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
           ImagePost.find({ author: user._id })
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
           VideoPost.find({ author: user._id })
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
         ]);
 
@@ -165,8 +534,14 @@ export const postResolvers = {
             return {
               ...obj,
               id: post._id.toString(),
-              totalLikes: obj.likes ? obj.likes.length : 0,
-              totalComments: obj.comments ? obj.comments.length : 0,
+              author: obj.author
+                ? {
+                  ...obj.author,
+                  id: obj.author._id.toString(),
+                }
+                : null,
+              totalLikes: obj.likesCount || 0,
+              totalComments: obj.commentsCount || 0,
             };
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -193,22 +568,12 @@ export const postResolvers = {
 
     getPostById: async (_, { postId }, context) => {
       try {
-        const user = await requireAuth(context.req);
+        await requireAuth(context.req);
 
         // Try to find post in each collection
-        const post =
-          (await ArticlePost.findById(postId)
-            .populate('author')
-            .populate('likes')
-            .populate('comments.user')) ||
-          (await ImagePost.findById(postId)
-            .populate('author')
-            .populate('likes')
-            .populate('comments.user')) ||
-          (await VideoPost.findById(postId)
-            .populate('author')
-            .populate('likes')
-            .populate('comments.user'));
+        const post = await ArticlePost.findById(postId).populate('author') ||
+          await ImagePost.findById(postId).populate('author') ||
+          await VideoPost.findById(postId).populate('author');
 
         if (!post) {
           return {
@@ -234,11 +599,10 @@ export const postResolvers = {
                 id: obj.author._id.toString(),
               }
               : null,
-            totalLikes: obj.likes ? obj.likes.length : 0,
-            totalComments: obj.comments ? obj.comments.length : 0,
+            totalLikes: obj.likesCount || 0,
+            totalComments: obj.commentsCount || 0,
           },
         };
-
 
       } catch (error) {
         Logger.error('Get post by ID error:', error);
@@ -251,9 +615,8 @@ export const postResolvers = {
       }
     },
 
-    getUserPosts: async (_, { offset = 0, limit = 10, userId }, context) => {
+    getUserPosts: async (_, { offset = 0, limit = 10, userId }) => {
       try {
-
         const user = await User.findById(userId);
         if (!user) {
           return {
@@ -268,18 +631,12 @@ export const postResolvers = {
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({ author: user._id })
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
           ImagePost.find({ author: user._id })
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
           VideoPost.find({ author: user._id })
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
         ]);
 
@@ -296,8 +653,8 @@ export const postResolvers = {
                   id: obj.author._id.toString(),
                 }
                 : null,
-              totalLikes: obj.likes ? obj.likes.length : 0,
-              totalComments: obj.comments ? obj.comments.length : 0,
+              totalLikes: obj.likesCount || 0,
+              totalComments: obj.commentsCount || 0,
             };
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -312,7 +669,7 @@ export const postResolvers = {
           posts,
         };
       } catch (error) {
-        Logger.error('Get posts error:', error);
+        Logger.error('Get user posts error:', error);
         return {
           success: false,
           message: 'Failed to fetch posts',
@@ -321,28 +678,23 @@ export const postResolvers = {
         };
       }
     },
-    getHomeFeed: async (_, { offset = 0, limit = 10 }, context) => {
+
+    getHomeFeed: async (_, { offset = 0, limit = 10 }) => {
       try {
-        // ✅ Fetch all post types (global feed)
+        // Fetch all post types (global feed)
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({})
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
           ImagePost.find({})
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
           VideoPost.find({})
             .populate('author')
-            .populate('likes')
-            .populate('comments.user')
             .sort({ createdAt: -1 }),
         ]);
 
-        // ✅ Merge and normalize
+        // Merge and normalize
         let posts = [...articles, ...images, ...videos]
           .map(post => {
             const obj = post.toObject();
@@ -355,14 +707,13 @@ export const postResolvers = {
                   id: obj.author._id.toString(),
                 }
                 : null,
-              totalLikes: obj.likes ? obj.likes.length : 0,
-              totalComments: obj.comments ? obj.comments.length : 0,
+              totalLikes: obj.likesCount || 0,
+              totalComments: obj.commentsCount || 0,
             };
           })
-
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        // ✅ Apply offset + limit
+        // Apply offset + limit
         posts = posts.slice(offset, offset + limit);
 
         return {
@@ -382,6 +733,89 @@ export const postResolvers = {
       }
     },
 
+    getPostComments: async (_, { postId, offset = 0, limit = 10 }) => {
+      try {
+        const comments = await Comment.find({ post: postId, parentComment: null })
+          .populate('user')
+          .sort({ createdAt: -1 })
+          .skip(offset)
+          .limit(limit);
 
+        // Get reply counts for each comment
+        const commentsWithReplies = await Promise.all(
+          comments.map(async (comment) => {
+            const replyCount = await Comment.countDocuments({ parentComment: comment._id });
+            const likeCount = await CommentLike.countDocuments({ comment: comment._id });
+
+            return {
+              ...comment.toObject(),
+              id: comment._id.toString(),
+              user: {
+                ...comment.user.toObject(),
+                id: comment.user._id.toString(),
+              },
+              replyCount,
+              likeCount,
+            };
+          })
+        );
+
+        return {
+          success: true,
+          message: 'Comments fetched successfully',
+          statusCode: 200,
+          comments: commentsWithReplies,
+        };
+      } catch (error) {
+        Logger.error('Get post comments error:', error);
+        return {
+          success: false,
+          message: 'Failed to fetch comments',
+          statusCode: 500,
+          comments: [],
+        };
+      }
+    },
+
+    getCommentReplies: async (_, { commentId, offset = 0, limit = 10 }) => {
+      try {
+        const replies = await Comment.find({ parentComment: commentId })
+          .populate('user')
+          .sort({ createdAt: 1 }) // Replies in chronological order
+          .skip(offset)
+          .limit(limit);
+
+        const repliesWithLikes = await Promise.all(
+          replies.map(async (reply) => {
+            const likeCount = await CommentLike.countDocuments({ comment: reply._id });
+
+            return {
+              ...reply.toObject(),
+              id: reply._id.toString(),
+              user: {
+                ...reply.user.toObject(),
+                id: reply.user._id.toString(),
+              },
+              likeCount,
+            };
+          })
+        );
+
+        return {
+          success: true,
+          message: 'Replies fetched successfully',
+          statusCode: 200,
+          comments: repliesWithLikes,
+        };
+      } catch (error) {
+        Logger.error('Get comment replies error:', error);
+        return {
+          success: false,
+          message: 'Failed to fetch replies',
+          statusCode: 500,
+          comments: [],
+        };
+      }
+    }
   }
 };
