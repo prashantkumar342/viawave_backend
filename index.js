@@ -2,6 +2,7 @@
 // Core Imports
 // ----------------------
 import { makeExecutableSchema } from '@graphql-tools/schema';
+import { uploadSingleFile, uploadMultipleFiles, handleUploadError, deleteFile } from './middlewares/upload.js';
 import { ApolloServer } from 'apollo-server-express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
@@ -12,14 +13,10 @@ import http from 'http';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import { WebSocketServer } from 'ws';
+import indexRouter from './routes/routes.js'
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
-import {
-  deletePreviousProfilePicture,
-  handleUploadError,
-  uploadSingle,
-} from './middlewares/upload.js';
 import { User } from './models/userModel.js';
 import { Logger } from './utils/logger.js';
 import { socketIoServer } from './ws/socket.js';
@@ -145,8 +142,10 @@ async function startServer() {
       });
     });
 
+    app.use('/', indexRouter);
     // File upload route
-    app.post('/upload', uploadSingle, handleUploadError, async (req, res) => {
+    // File upload routes
+    app.post('/upload/single', uploadSingleFile(), handleUploadError, async (req, res) => {
       try {
         if (!req.file) {
           return res.status(400).json({
@@ -158,16 +157,15 @@ async function startServer() {
 
         const filePath = `/uploads/${req.body.folderName || 'default'}/${req.file.filename}`;
 
-        // If this is a profile picture upload, delete the previous one
+        // Handle profile picture deletion if needed
         if (req.body.folderName === 'profiles' && req.body.userId) {
           try {
             const user = await User.findById(req.body.userId);
             if (user && user.profilePicture) {
-              await deletePreviousProfilePicture(user.profilePicture);
+              await deleteFile(user.profilePicture);
             }
           } catch (error) {
             Logger.warn('Failed to delete previous profile picture:', error);
-            // Continue with upload even if deletion fails
           }
         }
 
@@ -192,6 +190,128 @@ async function startServer() {
         });
       }
     });
+
+    app.post('/upload/multiple', uploadMultipleFiles(), handleUploadError, async (req, res) => {
+      try {
+        if (!req.files || req.files.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'No files uploaded',
+            statusCode: 400,
+          });
+        }
+
+        const uploadedFiles = req.files.map(file => ({
+          filename: file.filename,
+          originalName: file.originalname,
+          path: `/uploads/${req.body.folderName || 'default'}/${file.filename}`,
+          size: file.size,
+          mimetype: file.mimetype,
+        }));
+
+        res.status(200).json({
+          success: true,
+          message: 'Files uploaded successfully',
+          statusCode: 200,
+          data: uploadedFiles,
+        });
+      } catch (error) {
+        Logger.error('Multiple upload error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Upload failed',
+          statusCode: 500,
+        });
+      }
+    });
+    // Video upload route (for larger files)
+    app.post('/upload/video', uploadSingleFile(), handleUploadError, async (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: 'No video file uploaded',
+            statusCode: 400,
+          });
+        }
+
+        const filePath = `/uploads/${req.body.folderName || 'videos'}/${req.file.filename}`;
+
+        res.status(200).json({
+          success: true,
+          message: 'Video uploaded successfully',
+          statusCode: 200,
+          data: {
+            filename: req.file.filename,
+            originalName: req.file.originalname,
+            path: filePath,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+          },
+        });
+      } catch (error) {
+        Logger.error('Video upload error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Video upload failed',
+          statusCode: 500,
+        });
+      }
+    });
+    // Profile picture upload route
+    // app.post('/upload/profile', (req, res, next) => {
+    //   // Set folderName to profiles if not provided
+    //   if (!req.body) req.body = {};
+    //   req.body.folderName = 'profiles';
+    //   next();
+    // }, uploadSingleFile(), handleUploadError, async (req, res) => {
+    //   try {
+    //     if (!req.file) {
+    //       return res.status(400).json({
+    //         success: false,
+    //         message: 'No profile picture uploaded',
+    //         statusCode: 400,
+    //       });
+    //     }
+
+    //     // Get user from token to handle previous profile picture deletion
+    //     try {
+    //       const token = req.headers.authorization?.replace('Bearer ', '') || req.cookies.waveToken;
+    //       if (token) {
+    //         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    //         const user = await User.findById(decoded.id);
+
+    //         if (user && user.profilePicture) {
+    //           await deleteFile(user.profilePicture);
+    //         }
+    //       }
+    //     } catch (authError) {
+    //       Logger.warn('Could not delete previous profile picture:', authError);
+    //     }
+
+    //     const filePath = `/uploads/profiles/${req.file.filename}`;
+
+    //     res.status(200).json({
+    //       success: true,
+    //       message: 'Profile picture uploaded successfully',
+    //       statusCode: 200,
+    //       data: {
+    //         filename: req.file.filename,
+    //         originalName: req.file.originalname,
+    //         path: filePath,
+    //         size: req.file.size,
+    //         mimetype: req.file.mimetype,
+    //       },
+    //     });
+    //   } catch (error) {
+    //     Logger.error('Profile upload error:', error);
+    //     res.status(500).json({
+    //       success: false,
+    //       message: 'Profile picture upload failed',
+    //       statusCode: 500,
+    //     });
+    //   }
+    // });
 
     // Start Listening
     httpServer.listen(HTTP_PORT, () => {

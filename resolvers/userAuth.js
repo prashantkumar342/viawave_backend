@@ -239,7 +239,7 @@ export const login = async (_, { email, password }, { res }) => {
 
 export const editProfile = async (
   _,
-  { username, fullName, dob, gender, bio, profilePicture, profilePictureFile },
+  { username, fullName, dob, gender, bio, profilePicture },
   context
 ) => {
   try {
@@ -255,80 +255,6 @@ export const editProfile = async (
       currentUser = await requireAuth(req);
     }
 
-    // Handle file upload if provided
-    let uploadedFilePath = null;
-    if (profilePictureFile && profilePictureFile.startsWith('data:image/')) {
-      try {
-        // Extract file data
-        const matches = profilePictureFile.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches && matches.length === 3) {
-          const mimeType = matches[1];
-          const base64Data = matches[2];
-          const buffer = Buffer.from(base64Data, 'base64');
-
-          // Generate filename using username or current user's username
-          const fileExtension = mimeType.split('/')[1];
-          const fileName = `${currentUser.username}_${Date.now()}.${fileExtension}`;
-
-          // Import fs and path for file operations
-          const fs = await import('fs');
-          const path = await import('path');
-
-          // Ensure directory exists
-          const uploadDir = path.default.join(
-            process.cwd(),
-            'public',
-            'uploads',
-            'profiles'
-          );
-          if (!fs.default.existsSync(uploadDir)) {
-            fs.default.mkdirSync(uploadDir, { recursive: true });
-          }
-
-          // Delete previous profile picture if it exists
-          if (
-            currentUser.profilePicture &&
-            currentUser.profilePicture.startsWith('/uploads/')
-          ) {
-            try {
-              const previousImagePath = path.default.join(
-                process.cwd(),
-                'public',
-                currentUser.profilePicture
-              );
-              if (fs.default.existsSync(previousImagePath)) {
-                fs.default.unlinkSync(previousImagePath);
-                console.log(
-                  'Previous profile picture deleted:',
-                  previousImagePath
-                );
-              }
-            } catch (deleteError) {
-              console.warn(
-                'Failed to delete previous profile picture:',
-                deleteError
-              );
-              // Continue with upload even if deletion fails
-            }
-          }
-
-          // Write new file
-          const filePath = path.default.join(uploadDir, fileName);
-          fs.default.writeFileSync(filePath, buffer);
-
-          // Set the uploaded file path
-          uploadedFilePath = `/uploads/profiles/${fileName}`;
-        }
-      } catch (error) {
-        console.error('File upload error:', error);
-        return {
-          success: false,
-          message: 'Failed to upload profile picture',
-          statusCode: 500,
-        };
-      }
-    }
-
     // Only allow specific fields: username, fullName, dob, gender, bio, profilePicture
     const update = {};
     if (username !== undefined) update.username = username;
@@ -342,7 +268,6 @@ export const editProfile = async (
     if (gender !== undefined) update.gender = gender;
     if (bio !== undefined) update.bio = bio;
     if (profilePicture !== undefined) update.profilePicture = profilePicture;
-    if (uploadedFilePath) update.profilePicture = uploadedFilePath;
 
     if (Object.keys(update).length === 0) {
       return {

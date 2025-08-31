@@ -1,3 +1,7 @@
+
+
+// Updated postResolver.js - Modified to work with file uploads
+
 import { ArticlePost, ImagePost, VideoPost } from '../models/postModel.js';
 import { requireAuth } from '../utils/requireAuth.js';
 import { Logger } from '../utils/logger.js';
@@ -5,106 +9,88 @@ import { User } from '../models/userModel.js';
 import { Like } from '../models/likeModel.js';
 import { Comment } from '../models/commentModel.js';
 import { CommentLike } from '../models/commentLikeModel.js';
+import { deleteFile } from '../middlewares/upload.js';
+import path from 'path';
+import fs from 'fs';
+
+
+const saveBase64AsFile = async (base64Data, username) => {
+  try {
+    // Extract base64 data and determine file extension
+    const matches = base64Data.match(/^data:image\/([a-zA-Z]*);base64,(.+)$/);
+    if (!matches) {
+      throw new Error('Invalid base64 image format');
+    }
+
+    const extension = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+    const data = matches[2];
+
+    // Create filename with username
+    const filename = `${username}_${Date.now()}.${extension}`;
+
+    // Ensure directory exists
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'posts', 'images');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Save file
+    const filePath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filePath, data, 'base64');
+
+    return `/uploads/posts/images/${filename}`;
+  } catch (error) {
+    Logger.error('Error saving base64 image:', error);
+    throw new Error('Failed to save image');
+  }
+};
+
+
 
 export const postResolvers = {
   Mutation: {
     // Create a new Article Post
-    createArticlePost: async (_, { title, content, contentFile, caption, tags }, context) => {
+    createArticlePost: async (_, { title, contentFile, caption, tags }, context) => {
       try {
         const user = await requireAuth(context.req);
-        console.log('createArticlePost input:', { title, content, contentFile, caption, tags });
 
         if (!title) {
           throw new Error("400: Title is required for an Article post");
         }
 
-        // Validate that either content or contentFile is provided
-        if (!content && !contentFile) {
-          throw new Error("400: Either content text or content file is required for an Article post");
+        if (!contentFile) {
+          throw new Error("400: Either content text or content image is required for an Article post");
         }
 
-        let finalContent = content || '';
+        let coverImage = null;
 
-        // Enhanced file handling with better error handling and validation
-        if (contentFile && contentFile.startsWith("data:image/")) {
+        // Handle contentFile (base64 image)
+        if (contentFile) {
           try {
-            // Extract file data with validation
-            const matches = contentFile.match(/^data:([^;]+);base64,(.+)$/);
-            if (matches && matches.length === 3) {
-              const mimeType = matches[1];
-              const base64Data = matches[2];
-
-              // Validate MIME type
-              const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-              if (!allowedMimeTypes.includes(mimeType)) {
-                return {
-                  success: false,
-                  message: 'Unsupported file type. Only JPEG, PNG, GIF, and WebP are allowed.',
-                  statusCode: 400,
-                };
-              }
-
-              const buffer = Buffer.from(base64Data, "base64");
-
-              // File size validation
-              const maxFileSize = 5 * 1024 * 1024; // 5MB
-              if (buffer.length > maxFileSize) {
-                return {
-                  success: false,
-                  message: 'File size too large. Maximum allowed size is 5MB.',
-                  statusCode: 400,
-                };
-              }
-
-              // Generate filename using username and timestamp
-              const fileExtension = mimeType.split("/")[1];
-              const fileName = `${user.username}_${Date.now()}.${fileExtension}`;
-
-              // Import fs and path for file operations
-              const fs = await import("fs");
-              const path = await import("path");
-
-              // Ensure directory exists
-              const uploadDir = path.default.join(
-                process.cwd(),
-                "public",
-                "uploads",
-                "articles"
-              );
-              if (!fs.default.existsSync(uploadDir)) {
-                fs.default.mkdirSync(uploadDir, { recursive: true });
-              }
-
-              // Write new file
-              const filePath = path.default.join(uploadDir, fileName);
-              fs.default.writeFileSync(filePath, buffer);
-
-              // Use uploaded file path as content
-              finalContent = `/uploads/articles/${fileName}`;
-              console.log('File uploaded successfully:', finalContent);
-            } else {
-              throw new Error('Invalid file format');
-            }
-          } catch (fileError) {
-            console.error('File upload error:', fileError);
-            return {
-              success: false,
-              message: 'Failed to upload content file',
-              statusCode: 500,
-            };
+            const username = user.username || user.name || 'user';
+            coverImage = await saveBase64AsFile(contentFile, username);
+          } catch (imageError) {
+            Logger.error('Failed to save content image:', imageError);
+            throw new Error("400: Invalid image format");
           }
         }
 
-        // Create article with proper content handling
+        console.log({
+          author: user._id,
+          title,
+          content: coverImage,
+          caption: caption || "",
+          tags: tags || [],
+        })
+
         const article = await ArticlePost.create({
           author: user._id,
           title,
-          content: finalContent,
+          content: coverImage,
           caption: caption || "",
           tags: tags || [],
         });
 
-        // Populate the created article
         const populatedArticle = await ArticlePost.findById(article._id)
           .populate('author');
 
@@ -121,17 +107,17 @@ export const postResolvers = {
             },
             totalLikes: populatedArticle.likesCount || 0,
             totalComments: populatedArticle.commentsCount || 0,
+            type: 'ArticlePost',
           },
         };
 
       } catch (error) {
         console.error('Create article error:', error);
 
-        // Handle specific validation errors
         if (error.message.startsWith('400:')) {
           return {
             success: false,
-            message: error.message.substring(4), // Remove "400: " prefix
+            message: error.message.substring(4),
             statusCode: 400,
           };
         }
@@ -144,18 +130,27 @@ export const postResolvers = {
       }
     },
 
-    // Create a new Image Post
+    // Create a new Image Post - Now expects uploaded image paths
     createImagePost: async (_, { images, caption, tags }, context) => {
       try {
         const user = await requireAuth(context.req);
 
         if (!images || images.length === 0) {
-          throw new Error("400: At least one image is required for an Image post");
+          throw new Error("400: At least one image path is required for an Image post");
+        }
+
+        // Validate that all image paths are properly formatted
+        const validImagePaths = images.filter(img =>
+          img && img.startsWith('/uploads/posts/images/')
+        );
+
+        if (validImagePaths.length === 0) {
+          throw new Error("400: Invalid image paths. Please upload images first using /upload/posts/images endpoint");
         }
 
         const imagePost = await ImagePost.create({
           author: user._id,
-          images,
+          images: validImagePaths,
           caption: caption || "",
           tags: tags || [],
         });
@@ -176,6 +171,7 @@ export const postResolvers = {
             },
             totalLikes: populatedImagePost.likesCount || 0,
             totalComments: populatedImagePost.commentsCount || 0,
+            type: 'ImagePost',
           },
         };
 
@@ -198,13 +194,23 @@ export const postResolvers = {
       }
     },
 
-    // Create a new Video Post
+    // Create a new Video Post - Now expects uploaded video path
     createVideoPost: async (_, { videoUrl, thumbnailUrl, caption, tags }, context) => {
       try {
         const user = await requireAuth(context.req);
 
         if (!videoUrl) {
           throw new Error("400: Video URL is required for a Video post");
+        }
+
+        // Validate video path format
+        if (!videoUrl.startsWith('/uploads/posts/videos/')) {
+          throw new Error("400: Invalid video path. Please upload video first using /upload/posts/video endpoint");
+        }
+
+        // Validate thumbnail path if provided
+        if (thumbnailUrl && !thumbnailUrl.startsWith('/uploads/posts/thumbnails/')) {
+          throw new Error("400: Invalid thumbnail path. Please upload thumbnail using /upload/posts/thumbnail endpoint");
         }
 
         const videoPost = await VideoPost.create({
@@ -231,6 +237,7 @@ export const postResolvers = {
             },
             totalLikes: populatedVideoPost.likesCount || 0,
             totalComments: populatedVideoPost.commentsCount || 0,
+            type: 'VideoPost',
           },
         };
 
@@ -253,6 +260,84 @@ export const postResolvers = {
       }
     },
 
+    // Delete post and associated files
+    deletePost: async (_, { postId }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+
+        // Find the post in any collection
+        let post = await ArticlePost.findById(postId) ||
+          await ImagePost.findById(postId) ||
+          await VideoPost.findById(postId);
+
+        if (!post) {
+          return {
+            success: false,
+            message: 'Post not found',
+            statusCode: 404,
+          };
+        }
+
+        // Check if user owns the post
+        if (post.author.toString() !== user._id.toString()) {
+          return {
+            success: false,
+            message: 'Unauthorized to delete this post',
+            statusCode: 403,
+          };
+        }
+
+        // Delete associated files
+        try {
+          if (post.images) {
+            // Image post - delete all images
+            for (const imagePath of post.images) {
+              await deleteFile(imagePath);
+            }
+          } else if (post.videoUrl) {
+            // Video post - delete video and thumbnail
+            await deleteFile(post.videoUrl);
+            if (post.thumbnailUrl) {
+              await deleteFile(post.thumbnailUrl);
+            }
+          }
+        } catch (fileError) {
+          Logger.warn('Could not delete post files:', fileError);
+        }
+
+        // Delete the post from appropriate collection
+        if (post.title && post.content) {
+          await ArticlePost.deleteOne({ _id: postId });
+        } else if (post.images) {
+          await ImagePost.deleteOne({ _id: postId });
+        } else if (post.videoUrl) {
+          await VideoPost.deleteOne({ _id: postId });
+        }
+
+        // Delete associated likes and comments
+        await Promise.all([
+          Like.deleteMany({ post: postId }),
+          Comment.deleteMany({ post: postId }),
+          CommentLike.deleteMany({ post: postId })
+        ]);
+
+        return {
+          success: true,
+          message: 'Post deleted successfully',
+          statusCode: 200,
+        };
+
+      } catch (error) {
+        Logger.error('Delete post error:', error);
+        return {
+          success: false,
+          message: 'Failed to delete post',
+          statusCode: 500,
+        };
+      }
+    },
+
+    // Rest of your existing mutations...
     toggleLike: async (_, { postId }, context) => {
       try {
         const user = await requireAuth(context.req);
@@ -262,7 +347,6 @@ export const postResolvers = {
         let message = "";
         if (existingLike) {
           await existingLike.deleteOne();
-          // Update all possible post types
           await Promise.all([
             ArticlePost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } }),
             ImagePost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } }),
@@ -271,7 +355,6 @@ export const postResolvers = {
           message = "Like removed";
         } else {
           await Like.create({ post: postId, user: user._id });
-          // Update all possible post types
           await Promise.all([
             ArticlePost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } }),
             ImagePost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } }),
@@ -280,7 +363,6 @@ export const postResolvers = {
           message = "Post liked";
         }
 
-        // Find the post in any collection
         const post = await ArticlePost.findById(postId).populate("author") ||
           await ImagePost.findById(postId).populate("author") ||
           await VideoPost.findById(postId).populate("author");
@@ -307,6 +389,7 @@ export const postResolvers = {
             },
             totalLikes: post.likesCount || 0,
             totalComments: post.commentsCount || 0,
+            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
           },
         };
       } catch (error) {
@@ -326,14 +409,12 @@ export const postResolvers = {
           parentComment: parentCommentId || null,
         });
 
-        // Update comment count for all possible post types
         await Promise.all([
           ArticlePost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } }),
           ImagePost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } }),
           VideoPost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } })
         ]);
 
-        // Find the post in any collection
         const post = await ArticlePost.findById(postId).populate("author") ||
           await ImagePost.findById(postId).populate("author") ||
           await VideoPost.findById(postId).populate("author");
@@ -360,6 +441,7 @@ export const postResolvers = {
             },
             totalLikes: post.likesCount || 0,
             totalComments: post.commentsCount || 0,
+            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
           },
         };
       } catch (error) {
@@ -380,7 +462,6 @@ export const postResolvers = {
         comment.text = text;
         await comment.save();
 
-        // Find the post in any collection
         const post = await ArticlePost.findById(comment.post).populate("author") ||
           await ImagePost.findById(comment.post).populate("author") ||
           await VideoPost.findById(comment.post).populate("author");
@@ -407,6 +488,7 @@ export const postResolvers = {
             },
             totalLikes: post.likesCount || 0,
             totalComments: post.commentsCount || 0,
+            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
           },
         };
       } catch (error) {
@@ -426,14 +508,12 @@ export const postResolvers = {
 
         await Comment.deleteOne({ _id: commentId });
 
-        // Update comment count for all possible post types
         await Promise.all([
           ArticlePost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } }),
           ImagePost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } }),
           VideoPost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } })
         ]);
 
-        // Find the post in any collection
         const post = await ArticlePost.findById(comment.post).populate("author") ||
           await ImagePost.findById(comment.post).populate("author") ||
           await VideoPost.findById(comment.post).populate("author");
@@ -460,6 +540,7 @@ export const postResolvers = {
             },
             totalLikes: post.likesCount || 0,
             totalComments: post.commentsCount || 0,
+            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
           },
         };
       } catch (error) {
@@ -468,7 +549,6 @@ export const postResolvers = {
       }
     },
 
-    // Toggle like on a comment
     toggleCommentLike: async (_, { commentId }, context) => {
       try {
         const user = await requireAuth(context.req);
@@ -514,7 +594,6 @@ export const postResolvers = {
       try {
         const user = await requireAuth(context.req);
 
-        // Fetch all post types by this user
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({ author: user._id })
             .populate('author')
@@ -527,7 +606,6 @@ export const postResolvers = {
             .sort({ createdAt: -1 }),
         ]);
 
-        // Merge and sort by createdAt
         let posts = [...articles, ...images, ...videos]
           .map(post => {
             const obj = post.toObject();
@@ -542,11 +620,11 @@ export const postResolvers = {
                 : null,
               totalLikes: obj.likesCount || 0,
               totalComments: obj.commentsCount || 0,
+              type: obj.title ? 'ArticlePost' : obj.images ? 'ImagePost' : 'VideoPost',
             };
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        // Apply offset + limit manually since we merged arrays
         posts = posts.slice(offset, offset + limit);
 
         return {
@@ -570,7 +648,6 @@ export const postResolvers = {
       try {
         await requireAuth(context.req);
 
-        // Try to find post in each collection
         const post = await ArticlePost.findById(postId).populate('author') ||
           await ImagePost.findById(postId).populate('author') ||
           await VideoPost.findById(postId).populate('author');
@@ -601,6 +678,7 @@ export const postResolvers = {
               : null,
             totalLikes: obj.likesCount || 0,
             totalComments: obj.commentsCount || 0,
+            type: obj.title ? 'ArticlePost' : obj.images ? 'ImagePost' : 'VideoPost',
           },
         };
 
@@ -627,7 +705,6 @@ export const postResolvers = {
           };
         }
 
-        // Fetch all post types by this user
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({ author: user._id })
             .populate('author')
@@ -640,7 +717,6 @@ export const postResolvers = {
             .sort({ createdAt: -1 }),
         ]);
 
-        // Merge and sort by createdAt
         let posts = [...articles, ...images, ...videos]
           .map(post => {
             const obj = post.toObject();
@@ -655,11 +731,11 @@ export const postResolvers = {
                 : null,
               totalLikes: obj.likesCount || 0,
               totalComments: obj.commentsCount || 0,
+              type: obj.title ? 'ArticlePost' : obj.images ? 'ImagePost' : 'VideoPost',
             };
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        // Apply offset + limit manually since we merged arrays
         posts = posts.slice(offset, offset + limit);
 
         return {
@@ -681,7 +757,6 @@ export const postResolvers = {
 
     getHomeFeed: async (_, { offset = 0, limit = 10 }) => {
       try {
-        // Fetch all post types (global feed)
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({})
             .populate('author')
@@ -694,7 +769,6 @@ export const postResolvers = {
             .sort({ createdAt: -1 }),
         ]);
 
-        // Merge and normalize
         let posts = [...articles, ...images, ...videos]
           .map(post => {
             const obj = post.toObject();
@@ -709,11 +783,11 @@ export const postResolvers = {
                 : null,
               totalLikes: obj.likesCount || 0,
               totalComments: obj.commentsCount || 0,
+              type: obj.title ? 'ArticlePost' : obj.images ? 'ImagePost' : 'VideoPost',
             };
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        // Apply offset + limit
         posts = posts.slice(offset, offset + limit);
 
         return {
@@ -741,7 +815,6 @@ export const postResolvers = {
           .skip(offset)
           .limit(limit);
 
-        // Get reply counts for each comment
         const commentsWithReplies = await Promise.all(
           comments.map(async (comment) => {
             const replyCount = await Comment.countDocuments({ parentComment: comment._id });
@@ -781,7 +854,7 @@ export const postResolvers = {
       try {
         const replies = await Comment.find({ parentComment: commentId })
           .populate('user')
-          .sort({ createdAt: 1 }) // Replies in chronological order
+          .sort({ createdAt: 1 })
           .skip(offset)
           .limit(limit);
 
@@ -819,3 +892,84 @@ export const postResolvers = {
     }
   }
 };
+
+// Updated postSchema.js - Add deletePost mutation and file upload support
+
+
+
+// Usage Instructions and Workflow:
+
+/*
+WORKFLOW FOR CREATING POSTS WITH FILE UPLOADS:
+
+1. For Image Posts:
+   - First upload images: POST /upload/posts/images (with files in FormData)
+   - Get image paths from response
+   - Then create post: GraphQL mutation createImagePost with image paths
+
+2. For Video Posts:
+   - First upload video: POST /upload/posts/video (with file in FormData)
+   - Optionally upload thumbnail: POST /upload/posts/thumbnail
+   - Get paths from responses
+   - Then create post: GraphQL mutation createVideoPost with video/thumbnail paths
+
+3. For Article Posts:
+   - No file upload needed, create directly with GraphQL mutation
+
+EXAMPLE FRONTEND WORKFLOW:
+
+// 1. Upload images
+const formData = new FormData();
+formData.append('files', imageFile1);
+formData.append('files', imageFile2);
+
+const uploadResponse = await fetch('/upload/posts/images', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${token}` },
+  body: formData
+});
+
+const { data: { images } } = await uploadResponse.json();
+
+// 2. Create image post with uploaded paths
+const CREATE_IMAGE_POST = gql`
+  mutation CreateImagePost($images: [String!]!, $caption: String, $tags: [String]) {
+    createImagePost(images: $images, caption: $caption, tags: $tags) {
+      success
+      message
+      statusCode
+      post {
+        id
+        images
+        caption
+        author {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+const result = await apolloClient.mutate({
+  mutation: CREATE_IMAGE_POST,
+  variables: {
+    images: images, // Use paths from upload response
+    caption: "My new post",
+    tags: ["nature", "photography"]
+  }
+});
+
+FOLDER STRUCTURE:
+public/
+  uploads/
+    profiles/           # Profile pictures
+    posts/
+      images/          # Post images
+      videos/          # Post videos  
+      thumbnails/      # Video thumbnails
+
+FILE NAMING:
+All files will be named: {username}_{timestamp}.{extension}
+Example: john_doe_1693123456789.jpg
+*/

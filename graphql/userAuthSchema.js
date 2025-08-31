@@ -87,14 +87,13 @@ export const userTypeDefs = gql`
     googleAuth(idToken: String!): AuthResponse!
     sendOTP(email: String!): OTPResponse
     editProfile(
-      username: String
-      fullName: String
-      dob: String
-      gender: String
-      bio: String
-      profilePicture: String
-      profilePictureFile: String
-    ): editProfileResponse!
+  username: String
+  fullName: String
+  dob: String
+  gender: String
+  bio: String
+  profilePicture: String
+): editProfileResponse!
   }
 `;
 

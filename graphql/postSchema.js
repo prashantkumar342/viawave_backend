@@ -11,6 +11,7 @@ export const userPostTypeDefs = gql`
     tags: [String!]!
     title: String!
     content: String!
+    coverImage: String        # New field for article cover images
     createdAt: String!
     updatedAt: String!
     likesCount: Int!
@@ -62,6 +63,13 @@ export const userPostTypeDefs = gql`
     likeCount: Int
   }
 
+  type File {
+    filename: String!
+    mimetype: String!
+    encoding: String!
+    url: String!
+  }
+
   type PostResponse {
     success: Boolean!
     message: String!
@@ -90,6 +98,12 @@ export const userPostTypeDefs = gql`
     comment: Comment
   }
 
+  type DeleteResponse {
+    success: Boolean!
+    message: String!
+    statusCode: Int!
+  }
+
   extend type Query {
     getMyPosts(limit: Int, offset: Int): PostsResponse!
     getPostById(postId: ID!): PostResponse!
@@ -102,24 +116,26 @@ export const userPostTypeDefs = gql`
   extend type Mutation {
     createArticlePost(
       title: String!
-      content: String           # Text content (optional if file provided)
-      contentFile: String       # Base64 encoded file (optional if text provided)
+      content: String          # Optional text content
+      contentFile: String     # Optional base64 image content
       caption: String
       tags: [String]
     ): PostResponse!
 
     createImagePost(
-      images: [String!]!        # Array of image URLs
+      images: [String!]!        # Array of uploaded image paths
       caption: String
       tags: [String]
     ): PostResponse!
 
     createVideoPost(
-      videoUrl: String!
-      thumbnailUrl: String
+      videoUrl: String!         # Uploaded video path
+      thumbnailUrl: String      # Optional uploaded thumbnail path
       caption: String
       tags: [String]
     ): PostResponse!
+
+    deletePost(postId: ID!): DeleteResponse!
 
     toggleLike(postId: ID!): PostResponse!
     
@@ -144,6 +160,7 @@ export const userPostResolvers = {
     createArticlePost: postResolvers.Mutation.createArticlePost,
     createImagePost: postResolvers.Mutation.createImagePost,
     createVideoPost: postResolvers.Mutation.createVideoPost,
+    deletePost: postResolvers.Mutation.deletePost,
     toggleLike: postResolvers.Mutation.toggleLike,
     addComment: postResolvers.Mutation.addComment,
     editComment: postResolvers.Mutation.editComment,

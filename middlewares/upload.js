@@ -1,3 +1,5 @@
+// upload.js - Fixed version with proper folder handling and username extraction
+
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
@@ -11,10 +13,10 @@ if (!fs.existsSync(uploadsDir)) {
 // Configure storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const folderName = req.body.folderName || 'default';
+    // Get folderName from the route middleware or default to 'default'
+    const folderName = req.folderName || req.body.folderName || 'default';
     const folderPath = path.join(uploadsDir, folderName);
 
-    // Create folder if it doesn't exist
     if (!fs.existsSync(folderPath)) {
       fs.mkdirSync(folderPath, { recursive: true });
     }
@@ -22,21 +24,23 @@ const storage = multer.diskStorage({
     cb(null, folderPath);
   },
   filename: (req, file, cb) => {
-    // Use username if provided, otherwise use original filename
-    const username = req.body.username || 'user';
+    // Extract username from authenticated user or fallback to body or default
+    const username = req.user?.username || req.user?.name || req.body.username || 'user';
     const fileExtension = path.extname(file.originalname);
     const fileName = `${username}_${Date.now()}${fileExtension}`;
     cb(null, fileName);
   },
 });
 
-// File filter
+// File filter for validation
 const fileFilter = (req, file, cb) => {
-  // Allow only image files
-  if (file.mimetype.startsWith('image/')) {
+  const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const videoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
+
+  if (imageTypes.includes(file.mimetype) || videoTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Only image files are allowed!'), false);
+    cb(new Error('Unsupported file type. Only images (JPEG, PNG, GIF, WebP) and videos (MP4, MPEG, MOV, AVI) are allowed.'), false);
   }
 };
 
@@ -45,26 +49,40 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 50 * 1024 * 1024, // 50MB limit for videos
   },
 });
 
-// Middleware for single file upload
-export const uploadSingle = upload.single('file');
+// Single file upload function with folder support
+export const uploadSingleFile = () => {
+  return upload.single('file');
+};
 
-// Middleware for multiple files upload
-export const uploadMultiple = upload.array('files', 5);
+// Multiple files upload function  
+export const uploadMultipleFiles = (maxCount = 5) => {
+  return upload.array('files', maxCount);
+};
 
-// Error handling middleware
+// Unified error handling function
 export const handleUploadError = (error, req, res, next) => {
   if (error instanceof multer.MulterError) {
+    let message = 'Upload error';
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        message: 'File too large. Maximum size is 5MB.',
-        statusCode: 400,
-      });
+      message = 'File size too large. Maximum allowed size is 50MB.';
+    } else if (error.code === 'LIMIT_FILE_COUNT') {
+      message = 'Too many files. Maximum allowed is 5 files.';
+    } else if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      message = 'Unexpected file field.';
     }
+
+    return res.status(400).json({
+      success: false,
+      message,
+      statusCode: 400,
+    });
+  }
+
+  if (error.message.includes('Unsupported file type')) {
     return res.status(400).json({
       success: false,
       message: error.message,
@@ -72,71 +90,26 @@ export const handleUploadError = (error, req, res, next) => {
     });
   }
 
-  if (error.message === 'Only image files are allowed!') {
-    return res.status(400).json({
-      success: false,
-      message: error.message,
-      statusCode: 400,
-    });
-  }
-
-  next(error);
+  return res.status(500).json({
+    success: false,
+    message: 'Internal server error during upload',
+    statusCode: 500,
+  });
 };
 
-// Helper function to get file path
-export const getFilePath = (filename, folderName = 'default') => {
-  return `/uploads/${folderName}/${filename}`;
-};
-
-// Helper function to get full server path
-export const getFullPath = (filename, folderName = 'default') => {
-  return path.join(process.cwd(), 'public', 'uploads', folderName, filename);
-};
-
-// Helper function to delete previous profile picture
-export const deletePreviousProfilePicture = async (userProfilePicture) => {
+// Helper function to delete files
+export const deleteFile = async (filePath) => {
   try {
-    if (userProfilePicture && userProfilePicture.startsWith('/uploads/')) {
-      const fullPath = path.join(process.cwd(), 'public', userProfilePicture);
+    if (filePath && filePath.startsWith('/uploads/')) {
+      const fullPath = path.join(process.cwd(), 'public', filePath);
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath);
-        console.log('Previous profile picture deleted:', fullPath);
         return true;
       }
     }
     return false;
   } catch (error) {
-    console.warn('Failed to delete previous profile picture:', error);
+    console.warn('Failed to delete file:', error);
     return false;
-  }
-};
-
-// Helper function to clean up orphaned profile pictures
-export const cleanupOrphanedProfilePictures = async () => {
-  try {
-    const profilesDir = path.join(
-      process.cwd(),
-      'public',
-      'uploads',
-      'profiles'
-    );
-    if (!fs.existsSync(profilesDir)) return;
-
-    const files = fs.readdirSync(profilesDir);
-    const { User } = await import('../models/userModel.js');
-
-    for (const file of files) {
-      const filePath = `/uploads/profiles/${file}`;
-      const user = await User.findOne({ profilePicture: filePath });
-
-      if (!user) {
-        // File is orphaned, delete it
-        const fullPath = path.join(profilesDir, file);
-        fs.unlinkSync(fullPath);
-        console.log('Deleted orphaned profile picture:', fullPath);
-      }
-    }
-  } catch (error) {
-    console.warn('Failed to cleanup orphaned profile pictures:', error);
   }
 };
