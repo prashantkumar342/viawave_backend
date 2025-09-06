@@ -759,53 +759,64 @@ export const postResolvers = {
       try {
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({})
-            .populate('author')
-            .sort({ createdAt: -1 }),
+            .populate("author")
+            .sort({ createdAt: -1 })
+            .skip(offset)
+            .limit(limit)
+            .lean(),
           ImagePost.find({})
-            .populate('author')
-            .sort({ createdAt: -1 }),
+            .populate("author")
+            .sort({ createdAt: -1 })
+            .skip(offset)
+            .limit(limit)
+            .lean(),
           VideoPost.find({})
-            .populate('author')
-            .sort({ createdAt: -1 }),
+            .populate("author")
+            .sort({ createdAt: -1 })
+            .skip(offset)
+            .limit(limit)
+            .lean(),
         ]);
 
         let posts = [...articles, ...images, ...videos]
-          .map(post => {
-            const obj = post.toObject();
-            return {
-              ...obj,
-              id: post._id.toString(),
-              author: obj.author
-                ? {
-                  ...obj.author,
-                  id: obj.author._id.toString(),
-                }
-                : null,
-              totalLikes: obj.likesCount || 0,
-              totalComments: obj.commentsCount || 0,
-              type: obj.title ? 'ArticlePost' : obj.images ? 'ImagePost' : 'VideoPost',
-            };
-          })
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          .map((obj) => ({
+            ...obj,
+            id: obj._id.toString(),
+            author: obj.author
+              ? { ...obj.author, id: obj.author._id.toString() }
+              : null,
+            likesCount: obj.likesCount ?? 0,
+            commentsCount: obj.commentsCount ?? 0,
+            totalLikes: obj.likesCount ?? 0,
+            totalComments: obj.commentsCount ?? 0,
+            type: obj.title
+              ? "ArticlePost"
+              : obj.images
+                ? "ImagePost"
+                : "VideoPost",
+          }))
 
-        posts = posts.slice(offset, offset + limit);
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .slice(0, limit); // final slice after merge
 
         return {
           success: true,
-          message: 'Home feed fetched successfully',
+          message: "Home feed fetched successfully",
           statusCode: 200,
           posts,
         };
       } catch (error) {
-        Logger.error('Get home feed error:', error);
+        Logger.error("Get home feed error:", error);
         return {
           success: false,
-          message: 'Failed to fetch home feed',
+          message: "Failed to fetch home feed",
           statusCode: 500,
           posts: [],
         };
       }
     },
+
+
 
     getPostComments: async (_, { postId, offset = 0, limit = 10 }) => {
       try {
@@ -892,84 +903,3 @@ export const postResolvers = {
     }
   }
 };
-
-// Updated postSchema.js - Add deletePost mutation and file upload support
-
-
-
-// Usage Instructions and Workflow:
-
-/*
-WORKFLOW FOR CREATING POSTS WITH FILE UPLOADS:
-
-1. For Image Posts:
-   - First upload images: POST /upload/posts/images (with files in FormData)
-   - Get image paths from response
-   - Then create post: GraphQL mutation createImagePost with image paths
-
-2. For Video Posts:
-   - First upload video: POST /upload/posts/video (with file in FormData)
-   - Optionally upload thumbnail: POST /upload/posts/thumbnail
-   - Get paths from responses
-   - Then create post: GraphQL mutation createVideoPost with video/thumbnail paths
-
-3. For Article Posts:
-   - No file upload needed, create directly with GraphQL mutation
-
-EXAMPLE FRONTEND WORKFLOW:
-
-// 1. Upload images
-const formData = new FormData();
-formData.append('files', imageFile1);
-formData.append('files', imageFile2);
-
-const uploadResponse = await fetch('/upload/posts/images', {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${token}` },
-  body: formData
-});
-
-const { data: { images } } = await uploadResponse.json();
-
-// 2. Create image post with uploaded paths
-const CREATE_IMAGE_POST = gql`
-  mutation CreateImagePost($images: [String!]!, $caption: String, $tags: [String]) {
-    createImagePost(images: $images, caption: $caption, tags: $tags) {
-      success
-      message
-      statusCode
-      post {
-        id
-        images
-        caption
-        author {
-          id
-          username
-        }
-      }
-    }
-  }
-`;
-
-const result = await apolloClient.mutate({
-  mutation: CREATE_IMAGE_POST,
-  variables: {
-    images: images, // Use paths from upload response
-    caption: "My new post",
-    tags: ["nature", "photography"]
-  }
-});
-
-FOLDER STRUCTURE:
-public/
-  uploads/
-    profiles/           # Profile pictures
-    posts/
-      images/          # Post images
-      videos/          # Post videos  
-      thumbnails/      # Video thumbnails
-
-FILE NAMING:
-All files will be named: {username}_{timestamp}.{extension}
-Example: john_doe_1693123456789.jpg
-*/
