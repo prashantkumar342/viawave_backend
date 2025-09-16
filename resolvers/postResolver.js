@@ -1,7 +1,5 @@
-
-
-// Updated postResolver.js - Modified to work with file uploads
-
+// Updated postResolver.js - Modified to include isLiked field
+import { pubsub } from '../utils/pubsub.js';
 import { ArticlePost, ImagePost, VideoPost } from '../models/postModel.js';
 import { requireAuth } from '../utils/requireAuth.js';
 import { Logger } from '../utils/logger.js';
@@ -12,7 +10,7 @@ import { CommentLike } from '../models/commentLikeModel.js';
 import { deleteFile } from '../middlewares/upload.js';
 import path from 'path';
 import fs from 'fs';
-
+const postTopic = (postId) => `POST_UPDATED_${String(postId)}`;
 
 const saveBase64AsFile = async (base64Data, username) => {
   try {
@@ -45,7 +43,49 @@ const saveBase64AsFile = async (base64Data, username) => {
   }
 };
 
+// Helper function to add isLiked field to a single post
+const addIsLikedToPost = async (post, userId) => {
+  if (!userId) {
+    return {
+      ...post,
+      isLiked: false,
+    };
+  }
 
+  const isLiked = await Like.exists({ post: post.id, user: userId });
+  return {
+    ...post,
+    isLiked: !!isLiked,
+  };
+};
+
+// Helper function to add isLiked field to multiple posts
+const addIsLikedToPosts = async (posts, userId) => {
+  if (!userId || posts.length === 0) {
+    return posts.map(post => ({
+      ...post,
+      isLiked: false,
+    }));
+  }
+
+  // Get all post IDs
+  const postIds = posts.map(post => post.id);
+
+  // Get all likes for these posts by the current user
+  const userLikes = await Like.find({
+    post: { $in: postIds },
+    user: userId
+  }).select('post');
+
+  // Create a Set of liked post IDs for quick lookup
+  const likedPostIds = new Set(userLikes.map(like => like.post.toString()));
+
+  // Add isLiked field to each post
+  return posts.map(post => ({
+    ...post,
+    isLiked: likedPostIds.has(post.id),
+  }));
+};
 
 export const postResolvers = {
   Mutation: {
@@ -75,14 +115,6 @@ export const postResolvers = {
           }
         }
 
-        console.log({
-          author: user._id,
-          title,
-          content: coverImage,
-          caption: caption || "",
-          tags: tags || [],
-        })
-
         const article = await ArticlePost.create({
           author: user._id,
           title,
@@ -94,21 +126,26 @@ export const postResolvers = {
         const populatedArticle = await ArticlePost.findById(article._id)
           .populate('author');
 
+        const postWithCounts = {
+          ...populatedArticle.toObject(),
+          id: populatedArticle._id.toString(),
+          author: {
+            ...populatedArticle.author.toObject(),
+            id: populatedArticle.author._id.toString(),
+          },
+          totalLikes: populatedArticle.likesCount || 0,
+          totalComments: populatedArticle.commentsCount || 0,
+          type: 'ArticlePost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message: "Article post created successfully",
           statusCode: 201,
-          post: {
-            ...populatedArticle.toObject(),
-            id: populatedArticle._id.toString(),
-            author: {
-              ...populatedArticle.author.toObject(),
-              id: populatedArticle.author._id.toString(),
-            },
-            totalLikes: populatedArticle.likesCount || 0,
-            totalComments: populatedArticle.commentsCount || 0,
-            type: 'ArticlePost',
-          },
+          post: postWithIsLiked,
         };
 
       } catch (error) {
@@ -158,21 +195,26 @@ export const postResolvers = {
         const populatedImagePost = await ImagePost.findById(imagePost._id)
           .populate('author');
 
+        const postWithCounts = {
+          ...populatedImagePost.toObject(),
+          id: populatedImagePost._id.toString(),
+          author: {
+            ...populatedImagePost.author.toObject(),
+            id: populatedImagePost.author._id.toString(),
+          },
+          totalLikes: populatedImagePost.likesCount || 0,
+          totalComments: populatedImagePost.commentsCount || 0,
+          type: 'ImagePost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message: "Image post created successfully",
           statusCode: 201,
-          post: {
-            ...populatedImagePost.toObject(),
-            id: populatedImagePost._id.toString(),
-            author: {
-              ...populatedImagePost.author.toObject(),
-              id: populatedImagePost.author._id.toString(),
-            },
-            totalLikes: populatedImagePost.likesCount || 0,
-            totalComments: populatedImagePost.commentsCount || 0,
-            type: 'ImagePost',
-          },
+          post: postWithIsLiked,
         };
 
       } catch (error) {
@@ -224,21 +266,26 @@ export const postResolvers = {
         const populatedVideoPost = await VideoPost.findById(videoPost._id)
           .populate('author');
 
+        const postWithCounts = {
+          ...populatedVideoPost.toObject(),
+          id: populatedVideoPost._id.toString(),
+          author: {
+            ...populatedVideoPost.author.toObject(),
+            id: populatedVideoPost.author._id.toString(),
+          },
+          totalLikes: populatedVideoPost.likesCount || 0,
+          totalComments: populatedVideoPost.commentsCount || 0,
+          type: 'VideoPost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message: "Video post created successfully",
           statusCode: 201,
-          post: {
-            ...populatedVideoPost.toObject(),
-            id: populatedVideoPost._id.toString(),
-            author: {
-              ...populatedVideoPost.author.toObject(),
-              id: populatedVideoPost.author._id.toString(),
-            },
-            totalLikes: populatedVideoPost.likesCount || 0,
-            totalComments: populatedVideoPost.commentsCount || 0,
-            type: 'VideoPost',
-          },
+          post: postWithIsLiked,
         };
 
       } catch (error) {
@@ -337,14 +384,14 @@ export const postResolvers = {
       }
     },
 
-    // Rest of your existing mutations...
     toggleLike: async (_, { postId }, context) => {
       try {
         const user = await requireAuth(context.req);
 
         const existingLike = await Like.findOne({ post: postId, user: user._id });
-
+        const isUnliking = !!existingLike;
         let message = "";
+
         if (existingLike) {
           await existingLike.deleteOne();
           await Promise.all([
@@ -376,24 +423,40 @@ export const postResolvers = {
           };
         }
 
+        // Publish a minimal like update to subscribers of this post
+        pubsub.publish(postTopic(post._id), {
+          postUpdated: {
+            postId: post._id.toString(),
+            action: isUnliking ? "UNLIKE" : "LIKE",
+            like: { userId: user._id.toString() }, // minimal like payload
+            totalLikes: post.likesCount || 0,
+            updatedAt: new Date().toISOString()
+          }
+        });
+
+        const postWithCounts = {
+          ...post.toObject(),
+          id: post._id.toString(),
+          author: {
+            ...post.author.toObject(),
+            id: post.author._id.toString(),
+          },
+          totalLikes: post.likesCount || 0,
+          totalComments: post.commentsCount || 0,
+          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message,
           statusCode: 200,
-          post: {
-            ...post.toObject(),
-            id: post._id.toString(),
-            author: {
-              ...post.author.toObject(),
-              id: post.author._id.toString(),
-            },
-            totalLikes: post.likesCount || 0,
-            totalComments: post.commentsCount || 0,
-            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
-          },
+          post: postWithIsLiked,
         };
       } catch (error) {
-        Logger.error("Toggle like error:", error);
+        console.log("Toggle like error:", error);
         return { success: false, message: "Failed to toggle like", statusCode: 500, post: null };
       }
     },
@@ -402,7 +465,7 @@ export const postResolvers = {
       try {
         const user = await requireAuth(context.req);
 
-        await Comment.create({
+        const createdComment = await Comment.create({
           post: postId,
           user: user._id,
           text,
@@ -428,21 +491,43 @@ export const postResolvers = {
           };
         }
 
+        // Publish a concise comment update for this post
+        pubsub.publish(postTopic(post._id), {
+          postUpdated: {
+            postId: post._id.toString(),
+            action: "COMMENT_ADDED",
+            comment: {
+              id: createdComment._id.toString(),
+              text: createdComment.text,
+              parentCommentId: createdComment.parentComment ? String(createdComment.parentComment) : null,
+              user: { id: user._id.toString(), name: user.username || user.name || null },
+              createdAt: createdComment.createdAt ? createdComment.createdAt.toISOString() : new Date().toISOString()
+            },
+            totalComments: post.commentsCount || 0,
+            updatedAt: new Date().toISOString()
+          }
+        });
+
+        const postWithCounts = {
+          ...post.toObject(),
+          id: post._id.toString(),
+          author: {
+            ...post.author.toObject(),
+            id: post.author._id.toString(),
+          },
+          totalLikes: post.likesCount || 0,
+          totalComments: post.commentsCount || 0,
+          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message: "Comment added",
           statusCode: 201,
-          post: {
-            ...post.toObject(),
-            id: post._id.toString(),
-            author: {
-              ...post.author.toObject(),
-              id: post.author._id.toString(),
-            },
-            totalLikes: post.likesCount || 0,
-            totalComments: post.commentsCount || 0,
-            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
-          },
+          post: postWithIsLiked,
         };
       } catch (error) {
         Logger.error("Add comment error:", error);
@@ -475,21 +560,42 @@ export const postResolvers = {
           };
         }
 
+        // Publish a concise comment update for this post
+        pubsub.publish(postTopic(post._id), {
+          postUpdated: {
+            postId: post._id.toString(),
+            action: "COMMENT_UPDATED",
+            comment: {
+              id: comment._id.toString(),
+              text: comment.text,
+              user: { id: user._id.toString(), name: user.username || user.name || null },
+              updatedAt: comment.updatedAt ? comment.updatedAt.toISOString() : new Date().toISOString()
+            },
+            totalComments: post.commentsCount || 0,
+            updatedAt: new Date().toISOString()
+          }
+        });
+
+        const postWithCounts = {
+          ...post.toObject(),
+          id: post._id.toString(),
+          author: {
+            ...post.author.toObject(),
+            id: post.author._id.toString(),
+          },
+          totalLikes: post.likesCount || 0,
+          totalComments: post.commentsCount || 0,
+          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message: "Comment updated",
           statusCode: 200,
-          post: {
-            ...post.toObject(),
-            id: post._id.toString(),
-            author: {
-              ...post.author.toObject(),
-              id: post.author._id.toString(),
-            },
-            totalLikes: post.likesCount || 0,
-            totalComments: post.commentsCount || 0,
-            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
-          },
+          post: postWithIsLiked,
         };
       } catch (error) {
         Logger.error("Edit comment error:", error);
@@ -506,17 +612,19 @@ export const postResolvers = {
           return { success: false, message: "Comment not found or unauthorized", statusCode: 404, post: null };
         }
 
+        const postId = comment.post;
+
         await Comment.deleteOne({ _id: commentId });
 
         await Promise.all([
-          ArticlePost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } }),
-          ImagePost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } }),
-          VideoPost.updateOne({ _id: comment.post }, { $inc: { commentsCount: -1 } })
+          ArticlePost.updateOne({ _id: postId }, { $inc: { commentsCount: -1 } }),
+          ImagePost.updateOne({ _id: postId }, { $inc: { commentsCount: -1 } }),
+          VideoPost.updateOne({ _id: postId }, { $inc: { commentsCount: -1 } })
         ]);
 
-        const post = await ArticlePost.findById(comment.post).populate("author") ||
-          await ImagePost.findById(comment.post).populate("author") ||
-          await VideoPost.findById(comment.post).populate("author");
+        const post = await ArticlePost.findById(postId).populate("author") ||
+          await ImagePost.findById(postId).populate("author") ||
+          await VideoPost.findById(postId).populate("author");
 
         if (!post) {
           return {
@@ -527,21 +635,37 @@ export const postResolvers = {
           };
         }
 
+        // Publish a concise comment deletion update for this post
+        pubsub.publish(postTopic(post._id), {
+          postUpdated: {
+            postId: post._id.toString(),
+            action: "COMMENT_DELETED",
+            comment: { id: commentId },
+            totalComments: post.commentsCount || 0,
+            updatedAt: new Date().toISOString()
+          }
+        });
+
+        const postWithCounts = {
+          ...post.toObject(),
+          id: post._id.toString(),
+          author: {
+            ...post.author.toObject(),
+            id: post.author._id.toString(),
+          },
+          totalLikes: post.likesCount || 0,
+          totalComments: post.commentsCount || 0,
+          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message: "Comment deleted",
           statusCode: 200,
-          post: {
-            ...post.toObject(),
-            id: post._id.toString(),
-            author: {
-              ...post.author.toObject(),
-              id: post.author._id.toString(),
-            },
-            totalLikes: post.likesCount || 0,
-            totalComments: post.commentsCount || 0,
-            type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
-          },
+          post: postWithIsLiked,
         };
       } catch (error) {
         Logger.error("Delete comment error:", error);
@@ -627,11 +751,14 @@ export const postResolvers = {
 
         posts = posts.slice(offset, offset + limit);
 
+        // Add isLiked field to all posts
+        const postsWithIsLiked = await addIsLikedToPosts(posts, user._id);
+
         return {
           success: true,
           message: 'Posts fetched successfully',
           statusCode: 200,
-          posts,
+          posts: postsWithIsLiked,
         };
       } catch (error) {
         Logger.error('Get posts error:', error);
@@ -646,7 +773,7 @@ export const postResolvers = {
 
     getPostById: async (_, { postId }, context) => {
       try {
-        await requireAuth(context.req);
+        const user = await requireAuth(context.req);
 
         const post = await ArticlePost.findById(postId).populate('author') ||
           await ImagePost.findById(postId).populate('author') ||
@@ -663,23 +790,28 @@ export const postResolvers = {
 
         const obj = post.toObject();
 
+        const postWithCounts = {
+          ...obj,
+          id: post._id.toString(),
+          author: obj.author
+            ? {
+              ...obj.author,
+              id: obj.author._id.toString(),
+            }
+            : null,
+          totalLikes: obj.likesCount || 0,
+          totalComments: obj.commentsCount || 0,
+          type: obj.title ? 'ArticlePost' : obj.images ? 'ImagePost' : 'VideoPost',
+        };
+
+        // Add isLiked field
+        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
         return {
           success: true,
           message: 'Post fetched successfully',
           statusCode: 200,
-          post: {
-            ...obj,
-            id: post._id.toString(),
-            author: obj.author
-              ? {
-                ...obj.author,
-                id: obj.author._id.toString(),
-              }
-              : null,
-            totalLikes: obj.likesCount || 0,
-            totalComments: obj.commentsCount || 0,
-            type: obj.title ? 'ArticlePost' : obj.images ? 'ImagePost' : 'VideoPost',
-          },
+          post: postWithIsLiked,
         };
 
       } catch (error) {
@@ -693,8 +825,21 @@ export const postResolvers = {
       }
     },
 
-    getUserPosts: async (_, { offset = 0, limit = 10, userId }) => {
+    getUserPosts: async (_, { offset = 0, limit = 10, userId }, context) => {
       try {
+        // Get current user for isLiked field (if authenticated)
+        let currentUser = null;
+        try {
+          currentUser = await requireAuth(context.req);
+        } catch (error) {
+          return {
+            success: false,
+            message: error,
+            statusCode: 404,
+            posts: [],
+          };
+        }
+
         const user = await User.findById(userId);
         if (!user) {
           return {
@@ -738,11 +883,14 @@ export const postResolvers = {
 
         posts = posts.slice(offset, offset + limit);
 
+        // Add isLiked field to all posts
+        const postsWithIsLiked = await addIsLikedToPosts(posts, currentUser?._id);
+
         return {
           success: true,
           message: 'Posts fetched successfully',
           statusCode: 200,
-          posts,
+          posts: postsWithIsLiked,
         };
       } catch (error) {
         Logger.error('Get user posts error:', error);
@@ -755,8 +903,21 @@ export const postResolvers = {
       }
     },
 
-    getHomeFeed: async (_, { offset = 0, limit = 10 }) => {
+    getHomeFeed: async (_, { offset = 0, limit = 10 }, context) => {
       try {
+        // Get current user for isLiked field (if authenticated)
+        let currentUser = null;
+        try {
+          currentUser = await requireAuth(context.req);
+        } catch (error) {
+          return {
+            success: false,
+            message: error,
+            statusCode: 500,
+            posts: [],
+          };
+        }
+
         const [articles, images, videos] = await Promise.all([
           ArticlePost.find({})
             .populate("author")
@@ -795,15 +956,17 @@ export const postResolvers = {
                 ? "ImagePost"
                 : "VideoPost",
           }))
-
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
           .slice(0, limit); // final slice after merge
+
+        // Add isLiked field to all posts
+        const postsWithIsLiked = await addIsLikedToPosts(posts, currentUser?._id);
 
         return {
           success: true,
           message: "Home feed fetched successfully",
           statusCode: 200,
-          posts,
+          posts: postsWithIsLiked,
         };
       } catch (error) {
         Logger.error("Get home feed error:", error);
@@ -815,8 +978,6 @@ export const postResolvers = {
         };
       }
     },
-
-
 
     getPostComments: async (_, { postId, offset = 0, limit = 10 }) => {
       try {

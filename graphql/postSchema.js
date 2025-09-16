@@ -18,6 +18,7 @@ export const userPostTypeDefs = gql`
     commentsCount: Int!
     totalLikes: Int!
     totalComments: Int!
+    isLiked: Boolean!         # New field - indicates if current user liked this post
     type: String!
   }
 
@@ -33,6 +34,7 @@ export const userPostTypeDefs = gql`
     commentsCount: Int!
     totalLikes: Int!
     totalComments: Int!
+    isLiked: Boolean!         # New field - indicates if current user liked this post
     type: String!
   }
 
@@ -49,6 +51,7 @@ export const userPostTypeDefs = gql`
     commentsCount: Int!
     totalLikes: Int!
     totalComments: Int!
+    isLiked: Boolean!         # New field - indicates if current user liked this post
     type: String!
   }
 
@@ -104,6 +107,29 @@ export const userPostTypeDefs = gql`
     statusCode: Int!
   }
 
+  type PostUpdatePayload {
+    postId: ID!
+    action: String!        # e.g. LIKE, UNLIKE, COMMENT_ADDED, COMMENT_UPDATED, COMMENT_DELETED
+    like: LikePayload      # for like/unlike
+    comment: CommentUpdate # for comment events
+    totalLikes: Int
+    totalComments: Int
+    updatedAt: String!
+  }
+
+  type LikePayload {
+    userId: ID!
+  }
+
+  type CommentUpdate {
+    id: ID!
+    text: String
+    parentCommentId: ID
+    user: User
+    createdAt: String
+    updatedAt: String
+  }
+
   extend type Query {
     getMyPosts(limit: Int, offset: Int): PostsResponse!
     getPostById(postId: ID!): PostResponse!
@@ -111,6 +137,14 @@ export const userPostTypeDefs = gql`
     getHomeFeed(limit: Int, offset: Int): PostsResponse!
     getPostComments(postId: ID!, limit: Int, offset: Int): CommentsResponse!
     getCommentReplies(commentId: ID!, limit: Int, offset: Int): CommentsResponse!
+  }
+
+  extend type Subscription {
+    # Fires when a post is updated (like/comment/edit/delete, etc.)
+    postUpdated(postId: ID!): PostUpdatePayload!
+
+    # Optional: Fires whenever a new post is created (global feed updates)
+    postCreated: Post!
   }
 
   extend type Mutation {
@@ -147,6 +181,11 @@ export const userPostTypeDefs = gql`
   }
 `;
 
+import { pubsub } from '../utils/pubsub.js';
+
+const postTopic = (postId) => `POST_UPDATED_${String(postId)}`;
+const POST_CREATED_TOPIC = "POST_CREATED";
+
 export const userPostResolvers = {
   Query: {
     getMyPosts: postResolvers.Query.getMyPosts,
@@ -157,15 +196,41 @@ export const userPostResolvers = {
     getCommentReplies: postResolvers.Query.getCommentReplies,
   },
   Mutation: {
-    createArticlePost: postResolvers.Mutation.createArticlePost,
-    createImagePost: postResolvers.Mutation.createImagePost,
-    createVideoPost: postResolvers.Mutation.createVideoPost,
+    createArticlePost: async (_, args, context) => {
+      const result = await postResolvers.Mutation.createArticlePost(_, args, context);
+      if (result.success && result.post) {
+        pubsub.publish(POST_CREATED_TOPIC, { postCreated: result.post });
+      }
+      return result;
+    },
+    createImagePost: async (_, args, context) => {
+      const result = await postResolvers.Mutation.createImagePost(_, args, context);
+      if (result.success && result.post) {
+        pubsub.publish(POST_CREATED_TOPIC, { postCreated: result.post });
+      }
+      return result;
+    },
+    createVideoPost: async (_, args, context) => {
+      const result = await postResolvers.Mutation.createVideoPost(_, args, context);
+      if (result.success && result.post) {
+        pubsub.publish(POST_CREATED_TOPIC, { postCreated: result.post });
+      }
+      return result;
+    },
     deletePost: postResolvers.Mutation.deletePost,
     toggleLike: postResolvers.Mutation.toggleLike,
     addComment: postResolvers.Mutation.addComment,
     editComment: postResolvers.Mutation.editComment,
     deleteComment: postResolvers.Mutation.deleteComment,
     toggleCommentLike: postResolvers.Mutation.toggleCommentLike,
+  },
+  Subscription: {
+    postUpdated: {
+      subscribe: (_, { postId }) => pubsub.asyncIterableIterator(postTopic(postId)),
+    },
+    postCreated: {
+      subscribe: () => pubsub.asyncIterableIterator(POST_CREATED_TOPIC),
+    },
   },
   Post: {
     __resolveType(obj) {
