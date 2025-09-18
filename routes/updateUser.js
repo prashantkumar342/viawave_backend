@@ -11,7 +11,6 @@ const router = express.Router();
 
 router.post('/profile',
   auth,
-  // Middleware to set folder name for profiles
   (req, res, next) => {
     req.folderName = 'profiles';
     next();

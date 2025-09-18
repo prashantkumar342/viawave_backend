@@ -492,16 +492,21 @@ export const postResolvers = {
         }
 
         // Publish a concise comment update for this post
+        const populatedComment = await Comment.findById(createdComment._id).populate('user');
+
         pubsub.publish(postTopic(post._id), {
           postUpdated: {
             postId: post._id.toString(),
             action: "COMMENT_ADDED",
             comment: {
-              id: createdComment._id.toString(),
-              text: createdComment.text,
-              parentCommentId: createdComment.parentComment ? String(createdComment.parentComment) : null,
-              user: { id: user._id.toString(), name: user.username || user.name || null },
-              createdAt: createdComment.createdAt ? createdComment.createdAt.toISOString() : new Date().toISOString()
+              id: populatedComment._id.toString(),
+              text: populatedComment.text,
+              parentCommentId: populatedComment.parentComment ? String(populatedComment.parentComment) : null,
+              user: {
+                ...populatedComment.user.toObject(),
+                id: populatedComment.user._id.toString(),
+              },
+              createdAt: populatedComment.createdAt ? populatedComment.createdAt.toISOString() : new Date().toISOString()
             },
             totalComments: post.commentsCount || 0,
             updatedAt: new Date().toISOString()
@@ -575,6 +580,7 @@ export const postResolvers = {
             updatedAt: new Date().toISOString()
           }
         });
+
 
         const postWithCounts = {
           ...post.toObject(),

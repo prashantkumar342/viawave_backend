@@ -83,7 +83,7 @@ export const userTypeDefs = gql`
       password: String!
       otp: Int!
     ): registerResponse!
-    login(email: String!, password: String!): loginResponse!
+    login(email: String!, password: String!, fcmToken: String!): loginResponse!
     googleAuth(idToken: String!): AuthResponse!
     sendOTP(email: String!): OTPResponse
     editProfile(

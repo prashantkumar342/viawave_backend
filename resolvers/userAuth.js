@@ -186,7 +186,7 @@ export const register = async (_, { username, email, password, otp }) => {
   }
 };
 
-export const login = async (_, { email, password }, { res }) => {
+export const login = async (_, { email, password, fcmToken }, { res }) => {
   try {
     const user = await userModel.findOne({ email });
 
@@ -214,6 +214,7 @@ export const login = async (_, { email, password }, { res }) => {
     await userModel.findByIdAndUpdate(user._id, {
       lastLogin: new Date(),
       token: token,
+      fcmToken: fcmToken
     });
 
     const userObj = user.toObject();

@@ -56,6 +56,9 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    fcmToken: {
+      type: String,
+    },
     coverImage: {
       type: String,
       default: '',

@@ -1,52 +1,62 @@
-import mongoose from 'mongoose';
-
-const { Schema, model } = mongoose;
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const NotificationSchema = new Schema({
-  recipient: {
+  userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-  },
-  sender: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    default: null, // system notifications may not have a sender
+    index: true
   },
   type: {
     type: String,
     enum: [
-      'like',
-      'comment',
-      'mention',
-      'link_request',
-      'link_accept',
-      'post_tag',
-      'new_follower',
-      'system',
+      'PROMOTIONAL',
+      'JOB_OPPORTUNITY',
+      'CONTENT_RECOMMENDATION',
+      'SOCIAL_ACTIVITY',
+      'PERSONALIZED_SUGGESTION',
+      'PROFILE_ACTIVITY'
     ],
-    required: true,
+    required: true
   },
-  post: {
-    type: Schema.Types.ObjectId,
-    ref: 'Post',
+  // Optional actor or source (e.g., company, user, system)
+  source: {
+    id: Schema.Types.ObjectId,
+    name: String,
+    avatarUrl: String
   },
-  link: {
-    type: Schema.Types.ObjectId,
-    ref: 'Link',
-  },
-  message: {
+  title: {
     type: String,
-    trim: true,
+    required: true
   },
-  isRead: {
-    type: Boolean,
-    default: false,
+  description: {
+    type: String
   },
-}, {
-  timestamps: true,
+  // Optional image or icon URL
+  imageUrl: {
+    type: String
+  },
+  // Optional action button data
+  action: {
+    label: String,
+    url: String
+  },
+  // Status indicator (e.g., unread, read)
+  status: {
+    type: String,
+    enum: ['UNREAD', 'READ'],
+    default: 'UNREAD'
+  },
+  // Timestamp for sorting/display
+  createdAt: {
+    type: Date,
+    default: Date.now,
+    index: true
+  }
 });
 
-const Notification = model('Notification', NotificationSchema);
+// Compound index for fast retrieval by user and status
+NotificationSchema.index({ userId: 1, status: 1, createdAt: -1 });
 
-export default Notification;
+module.exports = mongoose.model('Notification', NotificationSchema);
