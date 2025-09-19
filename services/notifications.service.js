@@ -1,16 +1,32 @@
-import { notificationModel as Notification } from "../models/notificationModel"
+import { Notification } from "../models/notificationModel.js";
+import { pushNotifications } from "./pushNotifications.service.js";
+
+const { sendToUser } = pushNotifications();
 
 export const createNotification = async (data) => {
-  const notif = new Notification({
-    userId: data.userId,
-    type: data.type,
-    source: data.source,
-    title: data.title,
-    description: data.description,
-    imageUrl: data.imageUrl,
-    action: data.action,
-  });
-  return await notif.save();
+  try {
+    const notif = new Notification({
+      userId: data.userId,
+      type: data.type,
+      source: data.source,
+      title: data.title,
+      description: data.description,
+      imageUrl: data.imageUrl,
+      action: data.action,
+    });
+
+    await notif.save();
+
+    // Send push notification if user ID and message exist
+    if (data.userId && data.title) {
+      await sendToUser(data.userId, data.title, data.description);
+    }
+
+    return notif;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    throw error;
+  }
 };
 
 export const createPromotional = (userId, title, description, actionLabel, actionUrl) =>
@@ -21,7 +37,6 @@ export const createPromotional = (userId, title, description, actionLabel, actio
     description,
     action: { label: actionLabel, url: actionUrl }
   });
-
 
 export const createJobOpportunity = (userId, companySource, title, description, actionLabel, actionUrl) =>
   createNotification({
@@ -42,15 +57,35 @@ export const createContentRecommendation = (userId, publisherSource, title, imag
     imageUrl
   });
 
-
-export const createSocialActivity = (userId, actorSource, title, description) =>
+export const createSocialActivity = (userId, actorId, actorName, actorAvatar, title, description) =>
   createNotification({
     userId,
     type: 'SOCIAL_ACTIVITY',
-    source: actorSource,
+    source: {
+      id: actorId,
+      name: actorName,
+      avatarUrl: actorAvatar
+    },
     title,
     description
   });
+
+// Delete notification by user and actor (for link request withdrawals)
+export const deleteLinkRequestNotification = async (userId, actorId) => {
+  try {
+    const result = await Notification.deleteOne({
+      userId: userId,
+      type: 'SOCIAL_ACTIVITY',
+      'source.id': actorId,
+      title: 'New Link Request'
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error deleting link request notification:', error);
+    throw error;
+  }
+};
 
 export const createPersonalizedSuggestion = (userId, curatorSource, title) =>
   createNotification({
@@ -60,7 +95,6 @@ export const createPersonalizedSuggestion = (userId, curatorSource, title) =>
     title
   });
 
-
 export const createProfileActivity = (userId, title, description, actionLabel, actionUrl) =>
   createNotification({
     userId,
@@ -69,3 +103,99 @@ export const createProfileActivity = (userId, title, description, actionLabel, a
     description,
     action: actionLabel && actionUrl ? { label: actionLabel, url: actionUrl } : undefined
   });
+
+// Updated to use offset instead of skip
+export const getNotifications = async (userId, limit, offset, status = null) => {
+  try {
+    const filter = { userId };
+    if (status) filter.status = status;
+
+    const notifications = await Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit || 20)
+      .skip(offset || 0) // MongoDB still uses skip internally, but we call it offset in our API
+      .lean();
+
+    // Add id field as string for each notification (for GraphQL)
+    return notifications.map(n => ({
+      ...n,
+      id: n._id.toString(),
+      userId: n.userId ? n.userId.toString() : null,
+      source: n.source
+        ? { ...n.source, id: n.source.id ? n.source.id.toString() : null }
+        : undefined
+    }));
+  } catch (error) {
+    console.error("Error fetching notifications", error);
+    throw error;
+  }
+};
+
+export const markAsRead = async (notificationIds, userId) => {
+  try {
+    const result = await Notification.updateMany(
+      {
+        _id: { $in: notificationIds },
+        userId: userId
+      },
+      { $set: { status: 'READ' } }
+    );
+
+    return result;
+  } catch (error) {
+    console.error('Error marking notifications as read:', error);
+    throw error;
+  }
+};
+
+export const markAllAsRead = async (userId) => {
+  try {
+    const result = await Notification.updateMany(
+      { userId: userId, status: 'UNREAD' },
+      { $set: { status: 'READ' } }
+    );
+
+    return result;
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    throw error;
+  }
+};
+
+export const deleteNotification = async (notificationId, userId) => {
+  try {
+    const result = await Notification.deleteOne({
+      _id: notificationId,
+      userId: userId
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    throw error;
+  }
+};
+
+export const deleteAllNotifications = async (userId) => {
+  try {
+    const result = await Notification.deleteMany({ userId });
+    return result;
+  } catch (error) {
+    console.error('Error deleting all notifications:', error);
+    throw error;
+  }
+};
+
+export const getUnreadCount = async (userId) => {
+  try {
+    const count = await Notification.countDocuments({
+      userId: userId,
+      status: 'UNREAD'
+    });
+
+    return count;
+  } catch (error) {
+    console.error('Error getting unread count:', error);
+    throw error;
+  }
+};

@@ -10,6 +10,7 @@ import {
   userLinkRequestResolvers,
   userLinkRequestTypeDefs,
 } from './userLinksSchema.js';
+import { notificationTypeDefs, notificationsResolvers } from './notificationSchema.js'
 
 import { userPostResolvers, userPostTypeDefs } from './postSchema.js';
 
@@ -34,12 +35,14 @@ export const typeDefs = mergeTypeDefs([
   findUserTypeDefs,
   userConversationTypeDefs,
   userLinkRequestTypeDefs,
-  userPostTypeDefs
+  userPostTypeDefs,
+  notificationTypeDefs
 ]);
 export const resolvers = mergeResolvers([
   userResolvers,
   findUserResolvers,
   userConversationResolvers,
   userLinkRequestResolvers,
-  userPostResolvers
+  userPostResolvers,
+  notificationsResolvers
 ]);
