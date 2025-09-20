@@ -3,41 +3,47 @@ import fs from 'fs';
 import path from 'path';
 import winston from 'winston';
 
-// Ensure log directory exists
+// Ensure log directory exists with error handling
 const logDir = 'logs';
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+} catch (error) {
+  console.error('Failed to create log directory:', error);
+  process.exit(1);
 }
 
-// Custom levels and colors
+// FIXED: Custom levels with proper priority ordering
+// Lower numbers = higher priority (error should be most important)
 const customLevels = {
   levels: {
-    success: 0,
-    info: 1,
-    warn: 2,
-    error: 3,
+    ERROR: 0,   // Highest priority
+    WARN: 1,
+    INFO: 2,
+    success: 3, // Lowest priority
   },
   colors: {
+    ERROR: 'red',
+    WARN: 'yellow',
+    INFO: 'cyan',
     success: 'green',
-    info: 'cyan',
-    warn: 'yellow',
-    error: 'red',
   },
 };
 
 // Tell winston to use these colors for console
 winston.addColors(customLevels.colors);
 
-// Common format
-const format = winston.format.combine(
+// FIXED: Console format with colors (only for console transport)
+const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.colorize(), // Only apply colors for console
   winston.format.printf(({ timestamp, level, message }) => {
-    const color = customLevels.colors[level] || 'white';
-    return `${chalk.gray(`[${timestamp}]`)} ${chalk[color](level.toUpperCase())}: ${message}`;
+    return `${chalk.gray(`[${timestamp}]`)} ${level}: ${message}`;
   })
 );
 
-// File-safe format (no colors)
+// FIXED: File format without colors (clean text for files)
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.printf(({ timestamp, level, message }) => {
@@ -45,30 +51,75 @@ const fileFormat = winston.format.combine(
   })
 );
 
-// Create Winston logger
+// Create Winston logger with proper configuration
 const logger = winston.createLogger({
   levels: customLevels.levels,
+  level: 'success', // FIXED: Set to lowest level to capture all messages
   transports: [
     // Console output with colors
-    new winston.transports.Console({ format }),
+    new winston.transports.Console({
+      format: consoleFormat
+    }),
 
-    // File output
+    // FIXED: File output without colors, proper level handling
     new winston.transports.File({
       filename: path.join(logDir, 'app.log'),
       format: fileFormat,
-      level: 'info', // log info and below (info, success, warn, error)
+      level: 'success', // Will capture all levels (success, info, warn, error)
       handleExceptions: true,
       maxsize: 5 * 1024 * 1024, // 5MB per file
       maxFiles: 5, // keep 5 backup logs
+    }),
+
+    // FIXED: Optional error-only log file
+    new winston.transports.File({
+      filename: path.join(logDir, 'error.log'),
+      format: fileFormat,
+      level: 'error', // Only error messages
+      handleExceptions: true,
+      maxsize: 5 * 1024 * 1024,
+      maxFiles: 3,
     }),
   ],
   exitOnError: false,
 });
 
-// Export the logger API
+// FIXED: Enhanced error handling and additional utility methods
 export const Logger = {
-  info: (msg) => logger.log('info', msg),
-  success: (msg) => logger.log('success', msg),
-  warn: (msg) => logger.log('warn', msg),
-  error: (msg) => logger.log('error', msg),
+  info: (msg, meta = {}) => logger.log('INFO', msg, meta),
+  success: (msg, meta = {}) => logger.log('success', msg, meta),
+  warn: (msg, meta = {}) => logger.log('WARN', msg, meta),
+  error: (msg, meta = {}) => logger.log('ERROR', msg, meta),
+
+  // Additional utility methods
+  level: (newLevel) => {
+    if (newLevel) {
+      logger.level = newLevel;
+    }
+    return logger.level;
+  },
+
+  // Method to safely log errors with stack traces
+  logError: (error, context = '') => {
+    const errorMessage = context ? `${context}: ${error.message}` : error.message;
+    logger.log('error', errorMessage, {
+      stack: error.stack,
+      name: error.name
+    });
+  }
 };
+
+// FIXED: Handle unhandled promise rejections and uncaught exceptions
+logger.exceptions.handle(
+  new winston.transports.File({
+    filename: path.join(logDir, 'exceptions.log'),
+    format: fileFormat
+  })
+);
+
+logger.rejections.handle(
+  new winston.transports.File({
+    filename: path.join(logDir, 'rejections.log'),
+    format: fileFormat
+  })
+);

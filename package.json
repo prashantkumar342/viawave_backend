@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@graphql-tools/schema": "^10.0.25",
+    "amqplib": "^0.10.9",
     "apollo-server-express": "^3.13.0",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.2",

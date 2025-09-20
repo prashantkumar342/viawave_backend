@@ -19,7 +19,6 @@ import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
 import { User } from './models/userModel.js';
 import { Logger } from './utils/logger.js';
-import { socketIoServer } from './ws/socket.js';
 
 // ----------------------
 // Load Env
@@ -130,8 +129,7 @@ async function startServer() {
 
     Logger.info('✅ WS subscriptions enabled');
 
-    // Socket.IO (optional, if you need it)
-    socketIoServer(httpServer);
+
 
     // Health Check
     app.get('/health', (req, res) => {
