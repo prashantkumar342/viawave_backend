@@ -42,14 +42,14 @@ redis.on('close', () => {
 });
 
 // Explicit connection when using lazyConnect
-(async () => {
-  try {
-    await redis.connect();
-    Logger.success('✅ Redis manually connected (lazyConnect)');
+// (async () => {
+//   try {
+//     await redis.connect();
+//     Logger.success('✅ Redis manually connected (lazyConnect)');
 
-    const pong = await redis.ping();
-    Logger.success(`✅ Redis ping response: ${pong}`);
-  } catch (err) {
-    Logger.error('❌ Redis connection or ping failed:', err.message);
-  }
-})();
+//     const pong = await redis.ping();
+//     Logger.success(`✅ Redis ping response: ${pong}`);
+//   } catch (err) {
+//     Logger.error('❌ Redis connection or ping failed:', err.message);
+//   }
+// })();

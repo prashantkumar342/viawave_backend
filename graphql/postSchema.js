@@ -1,5 +1,5 @@
 import { gql } from 'apollo-server-express';
-import { postResolvers } from '../resolvers/postResolver.js'
+import { postResolvers } from '../resolvers/postResolver.js';
 
 export const userPostTypeDefs = gql`
   union Post = ArticlePost | ImagePost | VideoPost
@@ -10,7 +10,7 @@ export const userPostTypeDefs = gql`
     caption: String
     tags: [String!]!
     title: String!
-    content: String!
+    image: String!
     coverImage: String        # New field for article cover images
     createdAt: String!
     updatedAt: String!
@@ -149,12 +149,14 @@ export const userPostTypeDefs = gql`
 
   extend type Mutation {
     createArticlePost(
-      title: String!
-      content: String          # Optional text content
-      contentFile: String     # Optional base64 image content
-      caption: String
-      tags: [String]
-    ): PostResponse!
+  title: String!
+  content: String          # text content
+  image: String            # uploaded image path
+  imageFile: String        # base64 image
+  caption: String
+  tags: [String]
+): PostResponse!
+
 
     createImagePost(
       images: [String!]!        # Array of uploaded image paths
@@ -234,7 +236,7 @@ export const userPostResolvers = {
   },
   Post: {
     __resolveType(obj) {
-      if (obj.title && obj.content) return 'ArticlePost';
+      if (obj.title && obj.image) return 'ArticlePost';
       if (obj.images) return 'ImagePost';
       if (obj.videoUrl) return 'VideoPost';
       return null;

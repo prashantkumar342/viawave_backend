@@ -80,6 +80,7 @@ export const userConversationTypeDefs = gql`
 
   extend type Subscription {
     messageReceived(conversationId: ID!): Message!
+    conversationUpdated(userId: ID!): Conversation!   # 🔥 New subscription
   }
 
   extend type Mutation {
@@ -91,6 +92,22 @@ export const userConversationTypeDefs = gql`
   }
 `;
 
+
+// export const userConversationResolvers = {
+//   Query: {
+//     myConversations: conversationResolvers.Query.myConversations,
+//     getMessages: conversationResolvers.Query.getMessages,
+//     searchConversation: conversationResolvers.Query.searchConversation,
+//   },
+//   Mutation: {
+//     sendMessage: conversationResolvers.Mutation.sendMessage,
+//   },
+//   Subscription: {
+//     messageReceived: conversationResolvers.Subscription.messageReceived,
+//   },
+//   Conversation: conversationResolvers.Conversation,
+//   Message: conversationResolvers.Message,
+// };
 export const userConversationResolvers = {
   Query: {
     myConversations: conversationResolvers.Query.myConversations,
@@ -102,6 +119,7 @@ export const userConversationResolvers = {
   },
   Subscription: {
     messageReceived: conversationResolvers.Subscription.messageReceived,
+    conversationUpdated: conversationResolvers.Subscription.conversationUpdated, // 🔥 Added
   },
   Conversation: conversationResolvers.Conversation,
   Message: conversationResolvers.Message,

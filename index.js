@@ -2,7 +2,6 @@
 // Core Imports
 // ----------------------
 import { makeExecutableSchema } from '@graphql-tools/schema';
-import { uploadSingleFile, uploadMultipleFiles, handleUploadError, deleteFile } from './middlewares/upload.js';
 import { ApolloServer } from 'apollo-server-express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
@@ -10,15 +9,14 @@ import dotenv from 'dotenv';
 import express from 'express';
 import { useServer } from 'graphql-ws/use/ws';
 import http from 'http';
-import jwt from 'jsonwebtoken';
 import path from 'path';
 import { WebSocketServer } from 'ws';
-import indexRouter from './routes/routes.js'
+import indexRouter from './routes/routes.js';
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
-import { User } from './models/userModel.js';
 import { Logger } from './utils/logger.js';
+import { requireAuth } from './utils/requireAuth.js';
 
 // ----------------------
 // Load Env
@@ -48,23 +46,32 @@ const HTTP_PORT = process.env.PORT || 9095;
 // ----------------------
 const createWebSocketContext = async (ctx) => {
   try {
-    const token =
+    // Extract token from connection params
+    let token =
       ctx.connectionParams?.Authorization ||
       ctx.connectionParams?.authorization ||
       ctx.connectionParams?.token;
+
+    console.log('WS Connection Params:', ctx.connectionParams);
+    console.log('Extracted Token:', token);
 
     if (!token) {
       Logger.warn('WS connection without token');
       return { user: null, authenticated: false };
     }
 
-    const cleanToken = token.replace('Bearer ', '');
-    const decoded = jwt.verify(cleanToken, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    // Remove 'Bearer ' prefix if present
+    if (token.startsWith('Bearer ')) {
+      token = token.slice(7);
+    }
 
-    if (!user) return { user: null, authenticated: false };
+    // 🔥 CRITICAL FIX: Pass token in the format requireAuth expects
+    // requireAuth expects either a req object or an object with token property
+    const user = await requireAuth({ token });
 
-    return { user, authenticated: true };
+    console.log('WS Auth Success:', user?.username || user?.id);
+    return { user, authenticated: true, req: { token } }; // Include req-like object
+
   } catch (error) {
     Logger.error('WS auth error:', error.message);
     return { user: null, authenticated: false };
@@ -104,7 +111,17 @@ async function startServer() {
     const apolloServer = new ApolloServer({
       schema,
       introspection: true,
-      context: ({ req, res }) => ({ req, res }),
+      context: async ({ req, res }) => {
+        let user = null;
+        try {
+          if (req) {
+            user = await requireAuth(req);
+          }
+        } catch (err) {
+          Logger.warn(`HTTP auth failed: ${err.message}`);
+        }
+        return { req, res, user };
+      },
     });
 
     await apolloServer.start();
@@ -129,8 +146,6 @@ async function startServer() {
 
     Logger.info('✅ WS subscriptions enabled');
 
-
-
     // Health Check
     app.get('/health', (req, res) => {
       res.status(200).json({
@@ -141,175 +156,6 @@ async function startServer() {
     });
 
     app.use('/', indexRouter);
-    // File upload route
-    // File upload routes
-    app.post('/upload/single', uploadSingleFile(), handleUploadError, async (req, res) => {
-      try {
-        if (!req.file) {
-          return res.status(400).json({
-            success: false,
-            message: 'No file uploaded',
-            statusCode: 400,
-          });
-        }
-
-        const filePath = `/uploads/${req.body.folderName || 'default'}/${req.file.filename}`;
-
-        // Handle profile picture deletion if needed
-        if (req.body.folderName === 'profiles' && req.body.userId) {
-          try {
-            const user = await User.findById(req.body.userId);
-            if (user && user.profilePicture) {
-              await deleteFile(user.profilePicture);
-            }
-          } catch (error) {
-            Logger.warn('Failed to delete previous profile picture:', error);
-          }
-        }
-
-        res.status(200).json({
-          success: true,
-          message: 'File uploaded successfully',
-          statusCode: 200,
-          data: {
-            filename: req.file.filename,
-            originalName: req.file.originalname,
-            path: filePath,
-            size: req.file.size,
-            mimetype: req.file.mimetype,
-          },
-        });
-      } catch (error) {
-        Logger.error('Upload error:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Upload failed',
-          statusCode: 500,
-        });
-      }
-    });
-
-    app.post('/upload/multiple', uploadMultipleFiles(), handleUploadError, async (req, res) => {
-      try {
-        if (!req.files || req.files.length === 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'No files uploaded',
-            statusCode: 400,
-          });
-        }
-
-        const uploadedFiles = req.files.map(file => ({
-          filename: file.filename,
-          originalName: file.originalname,
-          path: `/uploads/${req.body.folderName || 'default'}/${file.filename}`,
-          size: file.size,
-          mimetype: file.mimetype,
-        }));
-
-        res.status(200).json({
-          success: true,
-          message: 'Files uploaded successfully',
-          statusCode: 200,
-          data: uploadedFiles,
-        });
-      } catch (error) {
-        Logger.error('Multiple upload error:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Upload failed',
-          statusCode: 500,
-        });
-      }
-    });
-    // Video upload route (for larger files)
-    app.post('/upload/video', uploadSingleFile(), handleUploadError, async (req, res) => {
-      try {
-        if (!req.file) {
-          return res.status(400).json({
-            success: false,
-            message: 'No video file uploaded',
-            statusCode: 400,
-          });
-        }
-
-        const filePath = `/uploads/${req.body.folderName || 'videos'}/${req.file.filename}`;
-
-        res.status(200).json({
-          success: true,
-          message: 'Video uploaded successfully',
-          statusCode: 200,
-          data: {
-            filename: req.file.filename,
-            originalName: req.file.originalname,
-            path: filePath,
-            size: req.file.size,
-            mimetype: req.file.mimetype,
-          },
-        });
-      } catch (error) {
-        Logger.error('Video upload error:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Video upload failed',
-          statusCode: 500,
-        });
-      }
-    });
-    // Profile picture upload route
-    // app.post('/upload/profile', (req, res, next) => {
-    //   // Set folderName to profiles if not provided
-    //   if (!req.body) req.body = {};
-    //   req.body.folderName = 'profiles';
-    //   next();
-    // }, uploadSingleFile(), handleUploadError, async (req, res) => {
-    //   try {
-    //     if (!req.file) {
-    //       return res.status(400).json({
-    //         success: false,
-    //         message: 'No profile picture uploaded',
-    //         statusCode: 400,
-    //       });
-    //     }
-
-    //     // Get user from token to handle previous profile picture deletion
-    //     try {
-    //       const token = req.headers.authorization?.replace('Bearer ', '') || req.cookies.waveToken;
-    //       if (token) {
-    //         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    //         const user = await User.findById(decoded.id);
-
-    //         if (user && user.profilePicture) {
-    //           await deleteFile(user.profilePicture);
-    //         }
-    //       }
-    //     } catch (authError) {
-    //       Logger.warn('Could not delete previous profile picture:', authError);
-    //     }
-
-    //     const filePath = `/uploads/profiles/${req.file.filename}`;
-
-    //     res.status(200).json({
-    //       success: true,
-    //       message: 'Profile picture uploaded successfully',
-    //       statusCode: 200,
-    //       data: {
-    //         filename: req.file.filename,
-    //         originalName: req.file.originalname,
-    //         path: filePath,
-    //         size: req.file.size,
-    //         mimetype: req.file.mimetype,
-    //       },
-    //     });
-    //   } catch (error) {
-    //     Logger.error('Profile upload error:', error);
-    //     res.status(500).json({
-    //       success: false,
-    //       message: 'Profile picture upload failed',
-    //       statusCode: 500,
-    //     });
-    //   }
-    // });
 
     // Start Listening
     httpServer.listen(HTTP_PORT, () => {

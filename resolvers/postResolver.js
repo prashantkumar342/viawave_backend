@@ -1,15 +1,15 @@
 // Updated postResolver.js - Modified to include isLiked field
-import { pubsub } from '../utils/pubsub.js';
-import { ArticlePost, ImagePost, VideoPost } from '../models/postModel.js';
-import { requireAuth } from '../utils/requireAuth.js';
-import { Logger } from '../utils/logger.js';
-import { User } from '../models/userModel.js';
-import { Like } from '../models/likeModel.js';
-import { Comment } from '../models/commentModel.js';
-import { CommentLike } from '../models/commentLikeModel.js';
-import { deleteFile } from '../middlewares/upload.js';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+import { deleteFile } from '../middlewares/upload.js';
+import { CommentLike } from '../models/commentLikeModel.js';
+import { Comment } from '../models/commentModel.js';
+import { Like } from '../models/likeModel.js';
+import { ArticlePost, ImagePost, VideoPost } from '../models/postModel.js';
+import { User } from '../models/userModel.js';
+import { Logger } from '../utils/logger.js';
+import { pubsub } from '../utils/pubsub.js';
+import { requireAuth } from '../utils/requireAuth.js';
 const postTopic = (postId) => `POST_UPDATED_${String(postId)}`;
 
 const saveBase64AsFile = async (base64Data, username) => {
@@ -90,81 +90,61 @@ const addIsLikedToPosts = async (posts, userId) => {
 export const postResolvers = {
   Mutation: {
     // Create a new Article Post
-    createArticlePost: async (_, { title, contentFile, caption, tags }, context) => {
-      try {
-        const user = await requireAuth(context.req);
+    createArticlePost: async (_, { title, content, image, imageFile, caption, tags }, context) => {
+      const user = await requireAuth(context.req);
 
-        if (!title) {
-          throw new Error("400: Title is required for an Article post");
-        }
-
-        if (!contentFile) {
-          throw new Error("400: Either content text or content image is required for an Article post");
-        }
-
-        let coverImage = null;
-
-        // Handle contentFile (base64 image)
-        if (contentFile) {
-          try {
-            const username = user.username || user.name || 'user';
-            coverImage = await saveBase64AsFile(contentFile, username);
-          } catch (imageError) {
-            Logger.error('Failed to save content image:', imageError);
-            throw new Error("400: Invalid image format");
-          }
-        }
-
-        const article = await ArticlePost.create({
-          author: user._id,
-          title,
-          content: coverImage,
-          caption: caption || "",
-          tags: tags || [],
-        });
-
-        const populatedArticle = await ArticlePost.findById(article._id)
-          .populate('author');
-
-        const postWithCounts = {
-          ...populatedArticle.toObject(),
-          id: populatedArticle._id.toString(),
-          author: {
-            ...populatedArticle.author.toObject(),
-            id: populatedArticle.author._id.toString(),
-          },
-          totalLikes: populatedArticle.likesCount || 0,
-          totalComments: populatedArticle.commentsCount || 0,
-          type: 'ArticlePost',
-        };
-
-        // Add isLiked field
-        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
-
-        return {
-          success: true,
-          message: "Article post created successfully",
-          statusCode: 201,
-          post: postWithIsLiked,
-        };
-
-      } catch (error) {
-        console.error('Create article error:', error);
-
-        if (error.message.startsWith('400:')) {
-          return {
-            success: false,
-            message: error.message.substring(4),
-            statusCode: 400,
-          };
-        }
-
-        return {
-          success: false,
-          message: 'Failed to create article post',
-          statusCode: 500,
-        };
+      if (!title) {
+        throw new Error("400: Title is required for an Article post");
       }
+
+      if (!content && !image && !imageFile) {
+        throw new Error("400: Either content text or content image is required for an Article post");
+      }
+
+      let coverImage = null;
+
+      // Handle base64 imageFile
+      if (imageFile) {
+        const username = user.username || user.name || 'user';
+        coverImage = await saveBase64AsFile(imageFile, username);
+      }
+
+      // Prefer uploaded path if provided
+      if (image) {
+        coverImage = image;
+      }
+
+      const article = await ArticlePost.create({
+        author: user._id,
+        title,
+        image: coverImage || "",
+        caption: caption || "",
+        tags: tags || [],
+        content: content || "",   // save text content if provided
+      });
+
+      const populatedArticle = await ArticlePost.findById(article._id).populate("author");
+
+      const postWithCounts = {
+        ...populatedArticle.toObject(),
+        id: populatedArticle._id.toString(),
+        author: {
+          ...populatedArticle.author.toObject(),
+          id: populatedArticle.author._id.toString(),
+        },
+        totalLikes: populatedArticle.likesCount || 0,
+        totalComments: populatedArticle.commentsCount || 0,
+        type: "ArticlePost",
+      };
+
+      const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
+
+      return {
+        success: true,
+        message: "Article post created successfully",
+        statusCode: 201,
+        post: postWithIsLiked,
+      };
     },
 
     // Create a new Image Post - Now expects uploaded image paths

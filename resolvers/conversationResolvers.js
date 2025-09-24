@@ -8,6 +8,9 @@ import { requireAuth } from '../utils/requireAuth.js';
 const messageTopic = (conversationId) =>
   `MESSAGE_RECEIVED_${String(conversationId)}`;
 
+const conversationTopic = (userId) => `CONVERSATION_${String(userId)}`;
+
+
 export const conversationResolvers = {
   Query: {
     // Get all conversations for the authenticated user
@@ -211,6 +214,15 @@ export const conversationResolvers = {
           conversation.unreadCounts.set(String(user._id), 0);
           conversation.unreadCounts.set(String(recipientId), 0);
           await conversation.save();
+          // 🔔 Notify both users that a new conversation was created
+          for (const participantId of conversation.participants) {
+            pubsub.publish(conversationTopic(participantId), {
+              conversationUpdated: {
+                ...conversation.toObject(),
+                id: conversation._id,
+              },
+            });
+          }
         }
 
         // Prepare message document based on messageType
@@ -279,6 +291,14 @@ export const conversationResolvers = {
           }
         }
         await conversation.save();
+        for (const participantId of conversation.participants) {
+          pubsub.publish(conversationTopic(participantId), {
+            conversationUpdated: {
+              ...conversation.toObject(),
+              id: conversation._id,
+            },
+          });
+        }
 
         // Populate sender for response
         const populated = await MessageModel.findById(created._id).populate({
@@ -461,10 +481,53 @@ export const conversationResolvers = {
     },
   },
 
+  // Subscription: {
+  //   messageReceived: {
+  //     subscribe: (_, { conversationId }) => {
+  //       return pubsub.asyncIterableIterator(messageTopic(conversationId));
+  //     },
+  //   },
+  //   conversationUpdated: {
+  //     subscribe: (_, { userId }) => {
+  //       console.log(`Subscribing to conversation updates for user ${userId}`);
+  //       return pubsub.asyncIterableIterator(conversationTopic(userId));
+  //     },
+  //   },
+  // },
   Subscription: {
     messageReceived: {
-      subscribe: (_, { conversationId }) => {
+      subscribe: async (_, { conversationId }, context) => {
+        // Add authentication check for message subscription too
+        if (!context.authenticated || !context.user) {
+          throw new Error('401:Authentication required for subscription');
+        }
+        console.log(`🔔 Message subscription for conversation: ${conversationId}`);
         return pubsub.asyncIterableIterator(messageTopic(conversationId));
+      },
+    },
+    conversationUpdated: {
+      subscribe: async (_, { userId }, context) => {
+        console.log('🔍 ConversationUpdated subscription context:', {
+          authenticated: context.authenticated,
+          user: context.user?.username || context.user?._id,
+          userId
+        });
+
+        // 🔥 CRITICAL: Check authentication in WebSocket context
+        if (!context.authenticated || !context.user) {
+          console.error('❌ Unauthenticated subscription attempt');
+          throw new Error('401:Authentication required for subscription');
+        }
+
+        // 🔥 SECURITY: Verify user can only subscribe to their own updates
+        const currentUserId = String(context.user._id);
+        if (String(userId) !== currentUserId) {
+          console.error('❌ User trying to subscribe to other user\'s conversations');
+          throw new Error('403:Can only subscribe to your own conversations');
+        }
+
+        console.log(`✅ Subscribing to conversation updates for user ${userId}`);
+        return pubsub.asyncIterableIterator(conversationTopic(userId));
       },
     },
   },
