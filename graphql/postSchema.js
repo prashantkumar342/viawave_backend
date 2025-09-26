@@ -1,4 +1,4 @@
-import { gql } from 'apollo-server-express';
+import gql from 'graphql-tag';
 import { postResolvers } from '../resolvers/postResolver.js';
 
 export const userPostTypeDefs = gql`
@@ -108,7 +108,7 @@ export const userPostTypeDefs = gql`
   }
 
   type PostUpdatePayload {
-    postId: ID!
+    post: Post!
     action: String!        # e.g. LIKE, UNLIKE, COMMENT_ADDED, COMMENT_UPDATED, COMMENT_DELETED
     like: LikePayload      # for like/unlike
     comment: CommentUpdate # for comment events
@@ -147,7 +147,7 @@ export const userPostTypeDefs = gql`
   }
 
   extend type Mutation {
-    createArticlePost(
+  createArticlePost(
   title: String!
   content: String          # text content
   image: String            # uploaded image path

@@ -403,16 +403,7 @@ export const postResolvers = {
           };
         }
 
-        // Publish a minimal like update to subscribers of this post
-        pubsub.publish(postTopic(post._id), {
-          postUpdated: {
-            postId: post._id.toString(),
-            action: isUnliking ? "UNLIKE" : "LIKE",
-            like: { userId: user._id.toString() }, // minimal like payload
-            totalLikes: post.likesCount || 0,
-            updatedAt: new Date().toISOString()
-          }
-        });
+        
 
         const postWithCounts = {
           ...post.toObject(),
@@ -425,10 +416,18 @@ export const postResolvers = {
           totalComments: post.commentsCount || 0,
           type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
         };
-
         // Add isLiked field
         const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
-
+        // Publish a minimal like update to subscribers of this post
+        pubsub.publish(postTopic(post._id), {
+          postUpdated: {
+            post: postWithIsLiked,
+            action: isUnliking ? "UNLIKE" : "LIKE",
+            like: { userId: user._id.toString() }, // minimal like payload
+            totalLikes: post.likesCount || 0,
+            updatedAt: new Date().toISOString()
+          }
+        });
         return {
           success: true,
           message,
