@@ -134,7 +134,6 @@ export const userPostTypeDefs = gql`
     getMyPosts(limit: Int, offset: Int): PostsResponse!
     getPostById(postId: ID!): PostResponse!
     getUserPosts(userId: ID!, limit: Int, offset: Int): PostsResponse!
-    getHomeFeed(limit: Int, offset: Int): PostsResponse!
     getPostComments(postId: ID!, limit: Int, offset: Int): CommentsResponse!
     getCommentReplies(commentId: ID!, limit: Int, offset: Int): CommentsResponse!
   }
@@ -193,7 +192,6 @@ export const userPostResolvers = {
     getMyPosts: postResolvers.Query.getMyPosts,
     getPostById: postResolvers.Query.getPostById,
     getUserPosts: postResolvers.Query.getUserPosts,
-    getHomeFeed: postResolvers.Query.getHomeFeed,
     getPostComments: postResolvers.Query.getPostComments,
     getCommentReplies: postResolvers.Query.getCommentReplies,
   },

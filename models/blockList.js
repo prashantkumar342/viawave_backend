@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 
 const { Schema, model } = mongoose;
 
-const BlockSchema = new Schema({
+const BlockListSchema = new Schema({
   blocker: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -13,16 +13,12 @@ const BlockSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-  },
-  reason: {
-    type: String,
-    trim: true,
-  },
+  }
 }, {
   timestamps: true,
-  indexes: [{ unique: true, fields: ['blocker', 'blocked'] }],
+  indexes: [{ blocker: 1, blocked: 1 }, { unique: true }],
 });
 
-const Block = model('Block', BlockSchema);
+const BlockList = model('BlockList', BlockListSchema);
 
-export default Block;
+export default BlockList;
