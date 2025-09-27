@@ -1,6 +1,3 @@
-// ----------------------
-// Core Imports
-// ----------------------
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { ApolloServer } from 'apollo-server-express';
 import cookieParser from 'cookie-parser';
@@ -12,6 +9,7 @@ import http from 'http';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 import indexRouter from './routes/routes.js';
+import { graphqlUploadExpress } from "graphql-upload-minimal";
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
@@ -95,8 +93,15 @@ async function startServer() {
         credentials: true,
       })
     );
+
     app.use(express.json());
     app.use(cookieParser());
+
+    // Add graphql upload middleware BEFORE Apollo Server
+    app.use('/graphql', graphqlUploadExpress({
+      maxFileSize: 50_000_000, // 50MB
+      maxFiles: 5
+    }));
 
     // Serve static files from public directory
     app.use(
@@ -122,6 +127,8 @@ async function startServer() {
         }
         return { req, res, user };
       },
+      // Disable built-in file upload handling since we're using graphql-upload-minimal
+      uploads: false,
     });
 
     await apolloServer.start();

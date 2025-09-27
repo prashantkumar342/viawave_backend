@@ -1,5 +1,6 @@
 import { mergeResolvers, mergeTypeDefs } from '@graphql-tools/merge';
 
+
 import { findUserResolvers, findUserTypeDefs } from './findUserSchema.js';
 import { notificationsResolvers, notificationTypeDefs } from './notificationSchema.js';
 import { userResolvers, userTypeDefs } from './userAuthSchema.js';
@@ -14,7 +15,8 @@ import {
 
 import { userPostResolvers, userPostTypeDefs } from './postSchema.js';
 import { userModerationResolvers, userModerationTypeDefs } from './userModerationSchema.js';
-import { feedsResolvers, feedTypeDefs } from './feedSchema.js';
+import { feedsResolvers, feedTypeDefs } from './feedSchema.js'; 4
+import { interactionResolvers, interactionTypeDefs } from './interactionSchema.js';
 
 const rootTypeDefs = `#graphql
 type Query {
@@ -40,7 +42,8 @@ export const typeDefs = mergeTypeDefs([
   userPostTypeDefs,
   notificationTypeDefs,
   userModerationTypeDefs,
-  feedTypeDefs
+  feedTypeDefs,
+  interactionTypeDefs
 ]);
 export const resolvers = mergeResolvers([
   userResolvers,
@@ -50,5 +53,6 @@ export const resolvers = mergeResolvers([
   userPostResolvers,
   notificationsResolvers,
   userModerationResolvers,
-  feedsResolvers
+  feedsResolvers,
+  interactionResolvers
 ]);

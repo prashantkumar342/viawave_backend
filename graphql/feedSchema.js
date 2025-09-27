@@ -20,6 +20,7 @@ type ArticlePost {
     totalComments: Int!
     isLiked: Boolean!         # New field - indicates if current user liked this post
     type: String!
+    mediaUrl: String!
   }
 
   type ImagePost {
