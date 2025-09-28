@@ -37,6 +37,7 @@ enum MediaType {
   _id: ID!
   author: User!
   caption: String!
+  title: String
   media: [Media!]!
   type: String!      
   isLiked:Boolean!
