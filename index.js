@@ -95,6 +95,7 @@ async function startServer() {
     );
 
     app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
 
     // Add graphql upload middleware BEFORE Apollo Server

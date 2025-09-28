@@ -5,7 +5,7 @@ import { User } from '../models/userModel.js';
 
 dotenv.config();
 
-export async function auth(req, res, next) {
+const auth = async (req, res, next) => {
   try {
     const token =
       req.cookies.token ||
@@ -45,3 +45,5 @@ export async function auth(req, res, next) {
     });
   }
 }
+
+export default auth

@@ -2,7 +2,7 @@
 // Updated route file
 // profileUpload.js - Fixed route implementation
 
-import { auth } from "../middlewares/auth.js";
+import  auth  from "../middlewares/auth.js";
 import { uploadSingleFile, handleUploadError, deleteFile } from '../middlewares/upload.js';
 import express from "express";
 import { Logger } from "../utils/logger.js";

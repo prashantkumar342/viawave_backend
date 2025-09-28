@@ -1,34 +1,7 @@
-import { Like } from "../models/likeModel.js";
-import { ArticlePost, ImagePost, VideoPost } from "../models/postModel.js";
+import { Post } from "../models/postModel.js";
 import { Logger } from "../utils/logger.js";
 import { requireAuth } from "../utils/requireAuth.js";
 
-const addIsLikedToPosts = async (posts, userId) => {
-  if (!userId || posts.length === 0) {
-    return posts.map(post => ({
-      ...post,
-      isLiked: false,
-    }));
-  }
-
-  // Get all post IDs
-  const postIds = posts.map(post => post.id);
-
-  // Get all likes for these posts by the current user
-  const userLikes = await Like.find({
-    post: { $in: postIds },
-    user: userId
-  }).select('post');
-
-  // Create a Set of liked post IDs for quick lookup
-  const likedPostIds = new Set(userLikes.map(like => like.post.toString()));
-
-  // Add isLiked field to each post
-  return posts.map(post => ({
-    ...post,
-    isLiked: likedPostIds.has(post.id),
-  }));
-};
 export const feedResolvers = {
   getHomeFeed: async (_, { offset = 0, limit = 10 }, context) => {
     try {
@@ -45,55 +18,52 @@ export const feedResolvers = {
         };
       }
 
-      const [articles, images, videos] = await Promise.all([
-        ArticlePost.find({})
-          .populate("author")
-          .sort({ createdAt: -1 })
-          .skip(offset)
-          .limit(limit)
-          .lean(),
-        ImagePost.find({})
-          .populate("author")
-          .sort({ createdAt: -1 })
-          .skip(offset)
-          .limit(limit)
-          .lean(),
-        VideoPost.find({})
-          .populate("author")
-          .sort({ createdAt: -1 })
-          .skip(offset)
-          .limit(limit)
-          .lean(),
+      const postsWithExtras = await Post.aggregate([
+        { $sort: { createdAt: -1 } },
+        { $skip: offset },
+        { $limit: limit },
+        // Populate author
+        {
+          $lookup: {
+            from: "users", // name of the User collection
+            localField: "author",
+            foreignField: "_id",
+            as: "author"
+          }
+        },
+        { $unwind: "$author" }, // Convert author array to object
+        // Lookup in Likes collection to check if the current user liked the post
+        {
+          $lookup: {
+            from: "likes", // the name of your Like collection in MongoDB
+            let: { postId: "$_id" },
+            pipeline: [
+              { $match: { $expr: { $and: [{ $eq: ["$post", "$$postId"] }, { $eq: ["$user", currentUser?._id] }] } } },
+              { $project: { _id: 1 } }
+            ],
+            as: "likedByUser"
+          }
+        },
+
+        // Add the isLiked field based on whether likedByUser array is empty
+        {
+          $addFields: {
+            isLiked: { $gt: [{ $size: "$likedByUser" }, 0] }
+          }
+        },
+
+        // Optional: remove the temporary likedByUser array
+        { $project: { likedByUser: 0 } }
       ]);
 
-      let posts = [...articles, ...images, ...videos]
-        .map((obj) => ({
-          ...obj,
-          id: obj._id.toString(),
-          author: obj.author
-            ? { ...obj.author, id: obj.author._id.toString() }
-            : null,
-          likesCount: obj.likesCount ?? 0,
-          commentsCount: obj.commentsCount ?? 0,
-          totalLikes: obj.likesCount ?? 0,
-          totalComments: obj.commentsCount ?? 0,
-          type: obj.title
-            ? "ArticlePost"
-            : obj.images
-              ? "ImagePost"
-              : "VideoPost",
-        }))
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, limit); // final slice after merge
 
-      // Add isLiked field to all posts
-      const postsWithIsLiked = await addIsLikedToPosts(posts, currentUser?._id);
+
 
       return {
         success: true,
         message: "Home feed fetched successfully",
         statusCode: 200,
-        posts: postsWithIsLiked,
+        posts: postsWithExtras,
       };
     } catch (error) {
       Logger.error("Get home feed error:", error);

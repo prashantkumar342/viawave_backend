@@ -1,5 +1,5 @@
 import express from "express";
-import { auth } from "../middlewares/auth.js";
+import  auth  from "../middlewares/auth.js";
 import { pushNotifications } from "../services/pushNotifications.service.js";
 import { Logger } from "../utils/logger.js";
 

@@ -1,4 +1,4 @@
-import gql from "graphql-tag";
+import { gql } from 'apollo-server-express';
 import { interactionResolvers as iR } from "../resolvers/interactionResolver.js";
 
 export const interactionTypeDefs = gql`
@@ -32,17 +32,11 @@ export const interactionTypeDefs = gql`
     success: Boolean!
     message: String!
     statusCode: Int!
-    comment: Comment
-  }
-
-  type MutationResponse {
-    success: Boolean!
-    message: String!
-    statusCode: Int!
   }
 
   type PostUpdatePayload {
     post: Post
+    postId: ID
     action: String!        # e.g. LIKE, UNLIKE, COMMENT_ADDED, COMMENT_UPDATED, COMMENT_DELETED
     like: LikePayload
     comment: CommentUpdate
@@ -98,6 +92,6 @@ export const interactionResolvers = {
     getCommentReplies: iR.Query.getCommentReplies,
   },
   Subscription: {
-    postUpdated : iR.Subscription.postUpdated
+    postUpdated: iR.Subscription.postUpdated
   },
 }

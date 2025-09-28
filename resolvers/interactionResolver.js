@@ -2,7 +2,7 @@ import { addIsLikedToPost } from "../helpers/post-response-other.js";
 import { CommentLike } from "../models/commentLikeModel.js";
 import { Comment } from "../models/commentModel.js"; // Add this import
 import { Like } from "../models/likeModel.js";
-import { ArticlePost, ImagePost, VideoPost } from "../models/postModel.js";
+import { Post } from "../models/postModel.js";
 import { Logger } from "../utils/logger.js";
 import { pubsub } from "../utils/pubsub.js";
 import { requireAuth } from "../utils/requireAuth.js";
@@ -21,25 +21,15 @@ export const interactionResolvers = {
 
         if (existingLike) {
           await existingLike.deleteOne();
-          await Promise.all([
-            ArticlePost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } }),
-            ImagePost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } }),
-            VideoPost.updateOne({ _id: postId }, { $inc: { likesCount: -1 } })
-          ]);
+          await Post.updateOne({ _id: postId }, { $inc: { likesCount: -1 } });
           message = "Like removed";
         } else {
           await Like.create({ post: postId, user: user._id });
-          await Promise.all([
-            ArticlePost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } }),
-            ImagePost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } }),
-            VideoPost.updateOne({ _id: postId }, { $inc: { likesCount: 1 } })
-          ]);
+          await Post.updateOne({ _id: postId }, { $inc: { likesCount: 1 } });
           message = "Post liked";
         }
 
-        const post = await ArticlePost.findById(postId).populate("author") ||
-          await ImagePost.findById(postId).populate("author") ||
-          await VideoPost.findById(postId).populate("author");
+        const post = await Post.findById(postId).populate("author");
 
         if (!post) {
           return {
@@ -59,7 +49,7 @@ export const interactionResolvers = {
           },
           totalLikes: post.likesCount || 0,
           totalComments: post.commentsCount || 0,
-          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+          type: post.type || 'Post',
         };
         // Add isLiked field
         const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
@@ -96,15 +86,9 @@ export const interactionResolvers = {
           parentComment: parentCommentId || null,
         });
 
-        await Promise.all([
-          ArticlePost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } }),
-          ImagePost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } }),
-          VideoPost.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } })
-        ]);
+        await Post.updateOne({ _id: postId }, { $inc: { commentsCount: 1 } });
 
-        const post = await ArticlePost.findById(postId).populate("author") ||
-          await ImagePost.findById(postId).populate("author") ||
-          await VideoPost.findById(postId).populate("author");
+        const post = await Post.findById(postId).populate("author");
 
         if (!post) {
           return {
@@ -146,7 +130,7 @@ export const interactionResolvers = {
           },
           totalLikes: post.likesCount || 0,
           totalComments: post.commentsCount || 0,
-          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+          type: post.type || 'Post',
         };
 
         // Add isLiked field
@@ -177,9 +161,7 @@ export const interactionResolvers = {
         comment.text = text;
         await comment.save();
 
-        const post = await ArticlePost.findById(comment.post).populate("author") ||
-          await ImagePost.findById(comment.post).populate("author") ||
-          await VideoPost.findById(comment.post).populate("author");
+        const post = await Post.findById(comment.post).populate("author");
 
         if (!post) {
           return {
@@ -215,7 +197,7 @@ export const interactionResolvers = {
           },
           totalLikes: post.likesCount || 0,
           totalComments: post.commentsCount || 0,
-          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+          type: post.type || 'Post',
         };
 
         // Add isLiked field
@@ -246,15 +228,9 @@ export const interactionResolvers = {
 
         await Comment.deleteOne({ _id: commentId });
 
-        await Promise.all([
-          ArticlePost.updateOne({ _id: postId }, { $inc: { commentsCount: -1 } }),
-          ImagePost.updateOne({ _id: postId }, { $inc: { commentsCount: -1 } }),
-          VideoPost.updateOne({ _id: postId }, { $inc: { commentsCount: -1 } })
-        ]);
+        await Post.updateOne({ _id: postId }, { $inc: { commentsCount: -1 } });
 
-        const post = await ArticlePost.findById(postId).populate("author") ||
-          await ImagePost.findById(postId).populate("author") ||
-          await VideoPost.findById(postId).populate("author");
+        const post = await Post.findById(postId).populate("author");
 
         if (!post) {
           return {
@@ -285,7 +261,7 @@ export const interactionResolvers = {
           },
           totalLikes: post.likesCount || 0,
           totalComments: post.commentsCount || 0,
-          type: post.title ? 'ArticlePost' : post.images ? 'ImagePost' : 'VideoPost',
+          type: post.type || 'Post',
         };
 
         // Add isLiked field

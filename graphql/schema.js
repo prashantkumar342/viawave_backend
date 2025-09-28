@@ -13,9 +13,9 @@ import {
   userLinkRequestTypeDefs,
 } from './userLinksSchema.js';
 
-import { userPostResolvers, userPostTypeDefs } from './postSchema.js';
+// import { userPostResolvers, userPostTypeDefs } from './postSchema.js';
 import { userModerationResolvers, userModerationTypeDefs } from './userModerationSchema.js';
-import { feedsResolvers, feedTypeDefs } from './feedSchema.js'; 4
+import { feedsResolvers, feedTypeDefs } from './feedSchema.js'; 
 import { interactionResolvers, interactionTypeDefs } from './interactionSchema.js';
 
 const rootTypeDefs = `#graphql
@@ -39,7 +39,7 @@ export const typeDefs = mergeTypeDefs([
   findUserTypeDefs,
   userConversationTypeDefs,
   userLinkRequestTypeDefs,
-  userPostTypeDefs,
+  // userPostTypeDefs,
   notificationTypeDefs,
   userModerationTypeDefs,
   feedTypeDefs,
@@ -50,7 +50,7 @@ export const resolvers = mergeResolvers([
   findUserResolvers,
   userConversationResolvers,
   userLinkRequestResolvers,
-  userPostResolvers,
+  // userPostResolvers,
   notificationsResolvers,
   userModerationResolvers,
   feedsResolvers,

@@ -1,6 +1,6 @@
 // postUpload.js - New route file for post file uploads
 
-import { auth } from "../middlewares/auth.js";
+import  auth  from "../middlewares/auth.js";
 import { uploadSingleFile, uploadMultipleFiles, handleUploadError } from '../middlewares/upload.js';
 import express from "express";
 import { Logger } from "../utils/logger.js";
