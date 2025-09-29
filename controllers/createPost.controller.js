@@ -9,8 +9,8 @@ export const createPostControllers = {
       const { title, caption } = req.body;
       const files = req.files;
 
-      if (!title|| !caption ) {
-        return res.status(400).json({ message: "Title and caption is required" });
+      if (!title || !caption) {
+        return res.status(400).json({ message: "Title and caption is required", success: false });
       }
 
       const folder = "posts";
@@ -35,12 +35,13 @@ export const createPostControllers = {
       });
 
       return res.status(201).json({
+        success: true,
         message: "Article post created successfully",
         post: newPost,
       });
     } catch (error) {
       Logger.error("Error creating article post:", error);
-      return res.status(500).json({ message: "Internal server error" });
+      return res.status(500).json({ message: "Internal server error", success: false });
     }
   },
 
@@ -50,8 +51,8 @@ export const createPostControllers = {
       const { caption } = req.body;
       const files = req.files;
 
-      if (!files||!caption) {
-        return res.status(400).json({ message: "caption is required" });
+      if (!files || !caption) {
+        return res.status(400).json({ message: "caption is required", success: false });
       }
 
       const folder = "posts";
@@ -76,12 +77,13 @@ export const createPostControllers = {
       });
 
       return res.status(201).json({
+        success: true,
         message: "Media post created successfully",
         post: newPost,
       });
     } catch (error) {
       Logger.error("Error creating media post:", error);
-      return res.status(500).json({ message: "Internal server error" });
+      return res.status(500).json({ message: "Internal server error", success: false });
     }
   },
 };
