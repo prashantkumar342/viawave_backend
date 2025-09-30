@@ -13,6 +13,10 @@ export const createPostControllers = {
         return res.status(400).json({ message: "Title and caption is required", success: false });
       }
 
+      if (!files || files.length === 0) {
+        return res.status(400).json({ message: "At least one media file is required", success: false });
+      }
+
       const folder = "posts";
 
       const mediaArray = await Promise.all(
@@ -21,7 +25,6 @@ export const createPostControllers = {
           return {
             url: key,
             type: file.mimetype.startsWith("image") ? "image" : "video",
-            ...(file.mimetype.startsWith("video") && { thumbnailUrl: "" }),
           };
         })
       );
@@ -51,8 +54,16 @@ export const createPostControllers = {
       const { caption } = req.body;
       const files = req.files;
 
-      if (!files || !caption) {
-        return res.status(400).json({ message: "caption is required", success: false });
+      if (!caption) {
+        return res.status(400).json({ message: "Caption is required", success: false });
+      }
+
+      if (!files || files.length === 0) {
+        return res.status(400).json({ message: "At least one media file is required", success: false });
+      }
+
+      if (files.length > 5) {
+        return res.status(400).json({ message: "Maximum 5 media files allowed", success: false });
       }
 
       const folder = "posts";
@@ -64,7 +75,6 @@ export const createPostControllers = {
           return {
             url: key,
             type: file.mimetype.startsWith("image") ? "image" : "video",
-            ...(file.mimetype.startsWith("video") && { thumbnailUrl: "" }),
           };
         })
       );

@@ -9,7 +9,7 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit per file
+    fileSize: 20 * 1024 * 1024, // 10MB limit per file
   },
   fileFilter: (req, file, cb) => {
     // Accept images and videos
@@ -21,9 +21,9 @@ const upload = multer({
   }
 });
 
-// ================= Create Post =================
+// ================= Create Post Routes =================
 router
   .post('/article', auth, upload.array('files', 10), createPostControllers.createArticlePost)
-  .post('/regularPost',auth, upload.array('files',10), createPostControllers.createMediaPost)
+  .post('/regularPost', auth, upload.array('files', 5), createPostControllers.createMediaPost)
 
 export default router;

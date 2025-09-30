@@ -39,7 +39,7 @@ enum MediaType {
   caption: String!
   title: String
   media: [Media!]!
-  type: String!      
+  type: String   
   isLiked:Boolean!
   likesCount:Int
   commentsCount:Int

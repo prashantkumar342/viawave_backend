@@ -4,12 +4,12 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import { graphqlUploadExpress } from "graphql-upload-minimal";
 import { useServer } from 'graphql-ws/use/ws';
 import http from 'http';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 import indexRouter from './routes/routes.js';
-import { graphqlUploadExpress } from "graphql-upload-minimal";
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
@@ -50,9 +50,6 @@ const createWebSocketContext = async (ctx) => {
       ctx.connectionParams?.authorization ||
       ctx.connectionParams?.token;
 
-    console.log('WS Connection Params:', ctx.connectionParams);
-    console.log('Extracted Token:', token);
-
     if (!token) {
       Logger.warn('WS connection without token');
       return { user: null, authenticated: false };
@@ -67,7 +64,6 @@ const createWebSocketContext = async (ctx) => {
     // requireAuth expects either a req object or an object with token property
     const user = await requireAuth({ token });
 
-    console.log('WS Auth Success:', user?.username || user?.id);
     return { user, authenticated: true, req: { token } }; // Include req-like object
 
   } catch (error) {
