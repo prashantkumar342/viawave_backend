@@ -1,4 +1,3 @@
-import { addIsLikedToPost } from "../helpers/post-response-other.js";
 import { CommentLike } from "../models/commentLikeModel.js";
 import { Comment } from "../models/commentModel.js"; // Add this import
 import { Like } from "../models/likeModel.js";
@@ -7,6 +6,20 @@ import { Logger } from "../utils/logger.js";
 import { pubsub } from "../utils/pubsub.js";
 import { requireAuth } from "../utils/requireAuth.js";
 
+export const addIsLikedToPost = async (post, userId) => {
+  if (!userId) {
+    return { ...post, isLiked: false };
+  }
+
+  // ✅ Safer check: handle both id and _id
+  const postId = post.id || post._id?.toString();
+
+  // ✅ If called from toggleLike, you could pass isLiked directly
+  // but for general cases we still check DB
+  const isLiked = await Like.exists({ post: postId, user: userId });
+
+  return { ...post, isLiked: !!isLiked };
+};
 const postTopic = (postId) => `POST_UPDATED_${String(postId)}`;
 
 export const interactionResolvers = {
@@ -15,65 +28,60 @@ export const interactionResolvers = {
       try {
         const user = await requireAuth(context.req);
 
+        const post = await Post.findById(postId).populate("author");
+        if (!post) {
+          return { success: false, message: "Post not found", statusCode: 404, post: null };
+        }
+
         const existingLike = await Like.findOne({ post: postId, user: user._id });
         const isUnliking = !!existingLike;
         let message = "";
 
-        if (existingLike) {
+        if (isUnliking) {
           await existingLike.deleteOne();
-          await Post.updateOne({ _id: postId }, { $inc: { likesCount: -1 } });
+          post.likesCount = Math.max(0, (post.likesCount || 0) - 1);
           message = "Like removed";
         } else {
           await Like.create({ post: postId, user: user._id });
-          await Post.updateOne({ _id: postId }, { $inc: { likesCount: 1 } });
+          post.likesCount = (post.likesCount || 0) + 1;
           message = "Post liked";
         }
 
-        const post = await Post.findById(postId).populate("author");
-
-        if (!post) {
-          return {
-            success: false,
-            message: "Post not found",
-            statusCode: 404,
-            post: null
-          };
-        }
+        await post.save();
 
         const postWithCounts = {
           ...post.toObject(),
           id: post._id.toString(),
-          author: {
-            ...post.author.toObject(),
-            id: post.author._id.toString(),
-          },
+          author: { ...post.author.toObject(), id: post.author._id.toString() },
           totalLikes: post.likesCount || 0,
           totalComments: post.commentsCount || 0,
-          type: post.type || 'Post',
+          type: post.type || "Post",
         };
-        // Add isLiked field
-        const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);
-        // Publish a minimal like update to subscribers of this post
+
+        // Publish WITHOUT isLiked - let the subscription resolver add it per user
         pubsub.publish(postTopic(post._id), {
           postUpdated: {
-            post: postWithIsLiked,
+            post: postWithCounts, // No isLiked here
             action: isUnliking ? "UNLIKE" : "LIKE",
-            like: { userId: user._id.toString() }, // minimal like payload
+            like: { userId: user._id.toString() },
             totalLikes: post.likesCount || 0,
-            updatedAt: new Date().toISOString()
-          }
+            updatedAt: new Date().toISOString(),
+          },
         });
+
+        // For the mutation response, add isLiked for the user who performed the action
         return {
           success: true,
           message,
           statusCode: 200,
-          post: postWithIsLiked,
+          post: { ...postWithCounts, isLiked: !isUnliking }
         };
       } catch (error) {
-        console.log("Toggle like error:", error);
+        Logger.error("Toggle like error:", error);
         return { success: false, message: "Failed to toggle like", statusCode: 500, post: null };
       }
     },
+
 
     addComment: async (_, { postId, text, parentCommentId }, context) => {
       try {
@@ -405,7 +413,44 @@ export const interactionResolvers = {
   },
   Subscription: {
     postUpdated: {
-      subscribe: (_, { postId }) => pubsub.asyncIterableIterator(postTopic(postId)),
+      subscribe: (_, { postId }, context) => {
+        // Optional: Add authentication check
+        if (!context.authenticated || !context.user) {
+          throw new Error('Authentication required for subscription');
+        }
+        return pubsub.asyncIterableIterator(postTopic(postId));
+      },
+      resolve: async (payload, args, context) => {
+        try {
+          // Get the subscribed user
+          const subscribedUserId = context.user?._id || context.user?.id;
+          console.log("Subscription resolve for user:", subscribedUserId)
+
+          // Clone the payload to avoid mutating the original
+          const updatedPayload = { ...payload.postUpdated };
+
+          // Check if this subscriber has liked the post
+          if (updatedPayload.post) {
+            // Check if the subscribed user has liked this post
+            console.log("Checking isLiked for user:", subscribedUserId)
+            const isLiked = subscribedUserId
+              ? await Like.exists({ post: updatedPayload.post._id || updatedPayload.post.id, user: subscribedUserId })
+              : false;
+            console.log("isLiked:", !!isLiked)
+
+            updatedPayload.post = {
+              ...updatedPayload.post,
+              isLiked: !!isLiked
+            };
+          }
+
+          return updatedPayload;
+        } catch (error) {
+          Logger.error('Subscription resolve error:', error);
+          // Return payload without isLiked on error
+          return payload.postUpdated;
+        }
+      }
     },
-  },
+  }
 }

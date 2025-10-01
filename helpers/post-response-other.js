@@ -2,18 +2,19 @@ import { Like } from "../models/likeModel.js";
 
 export const addIsLikedToPost = async (post, userId) => {
   if (!userId) {
-    return {
-      ...post,
-      isLiked: false,
-    };
+    return { ...post, isLiked: false };
   }
 
-  const isLiked = await Like.exists({ post: post.id, user: userId });
-  return {
-    ...post,
-    isLiked: !!isLiked,
-  };
+  // ✅ Safer check: handle both id and _id
+  const postId = post.id || post._id?.toString();
+
+  // ✅ If called from toggleLike, you could pass isLiked directly
+  // but for general cases we still check DB
+  const isLiked = await Like.exists({ post: postId, user: userId });
+
+  return { ...post, isLiked: !!isLiked };
 };
+
 
 // Helper function to add isLiked field to multiple posts
 export const addIsLikedToPosts = async (posts, userId) => {
