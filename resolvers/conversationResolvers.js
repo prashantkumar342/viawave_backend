@@ -1,6 +1,7 @@
 import { Conversation as ConversationModel } from '../models/conversationModel.js';
 import { Message as MessageModel } from '../models/messageModel.js';
 import { User as UserModel } from '../models/userModel.js';
+import { createSocialActivity } from '../services/notifications.service.js';
 import { Logger } from '../utils/logger.js';
 import { pubsub } from '../utils/pubsub.js';
 import { requireAuth } from '../utils/requireAuth.js';
@@ -223,6 +224,20 @@ export const conversationResolvers = {
               },
             });
           }
+          // push notification of new conversation can be added here
+          try {
+            await createSocialActivity(
+              recipientId,           // notification goes to receiver
+              user._id,               // actor ID
+              user.username || user.name || 'Someone',  // actor name
+              user.avatar || null,    // actor avatar
+              "New Conversation",     // title
+              `${user.username || user.name || 'Someone'} sent you a message!`  // description
+            );
+          } catch (notificationError) {
+            Logger.error('❌ Failed to create notification:', notificationError);
+            // Don't fail the main operation if notification fails
+          }
         }
 
         // Prepare message document based on messageType
@@ -261,6 +276,19 @@ export const conversationResolvers = {
         }
 
         const created = await MessageModel.create(messageDoc);
+        try {
+          await createSocialActivity(
+            recipientId,           // notification goes to receiver
+            user._id,               // actor ID
+            user.username || user.name || 'Someone',  // actor name
+            user.avatar || null,    // actor avatar
+            "New Message",     // title
+            `${user.username || user.name || 'Someone'} sent you a message!`  // description
+          );
+        } catch (notificationError) {
+          Logger.error('❌ Failed to create notification:', notificationError);
+          // Don't fail the main operation if notification fails
+        }
 
         // Update lastMessage and unreadCounts
         conversation.lastMessage = created._id;

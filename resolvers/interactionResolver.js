@@ -2,6 +2,7 @@ import { CommentLike } from "../models/commentLikeModel.js";
 import { Comment } from "../models/commentModel.js"; // Add this import
 import { Like } from "../models/likeModel.js";
 import { Post } from "../models/postModel.js";
+import { createSocialActivity } from "../services/notifications.service.js";
 import { Logger } from "../utils/logger.js";
 import { pubsub } from "../utils/pubsub.js";
 import { requireAuth } from "../utils/requireAuth.js";
@@ -140,6 +141,20 @@ export const interactionResolvers = {
           totalComments: post.commentsCount || 0,
           type: post.type || 'Post',
         };
+        // push notification of new comment can be added here
+        try {
+          await createSocialActivity(
+            post.author,           // notification goes to receiver
+            user._id,               // actor ID
+            user.username || user.name || 'Someone',  // actor name
+            user.profilePicture || null,    // actor avatar
+            user.username,     // title
+            `${text}!`  // description
+          );
+        } catch (notificationError) {
+          Logger.error('❌ Failed to create notification:', notificationError);
+          // Don't fail the main operation if notification fails
+        }
 
         // Add isLiked field
         const postWithIsLiked = await addIsLikedToPost(postWithCounts, user._id);

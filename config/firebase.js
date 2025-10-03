@@ -5,7 +5,7 @@ const serviceAccount = require("./firebase-service-account.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  projectId: serviceAccount.project_id,
+  // projectId: serviceAccount.project_id,
 });
 
 const messaging = admin.messaging();
