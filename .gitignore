@@ -48,6 +48,9 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+# FCM service account file
+./config/firebase-service-account.json
+
 # Optional npm cache directory
 .npm
 
@@ -135,3 +138,4 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+config/firebase-service-account.json
