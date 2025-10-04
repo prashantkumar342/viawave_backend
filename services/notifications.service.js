@@ -57,7 +57,7 @@ export const createContentRecommendation = (userId, publisherSource, title, imag
     imageUrl
   });
 
-export const createSocialActivity = (userId, actorId, actorName, actorAvatar, title, description) =>
+export const createSocialActivity = (userId, actorId, actorName, actorAvatar, title, description, actionLabel, actionUrl) =>
   createNotification({
     userId,
     type: 'SOCIAL_ACTIVITY',
@@ -67,25 +67,38 @@ export const createSocialActivity = (userId, actorId, actorName, actorAvatar, ti
       avatarUrl: actorAvatar
     },
     title,
-    description
+    description,
+    action: { label: actionLabel, url: actionUrl }
   });
 
 // Delete notification by user and actor (for link request withdrawals)
 export const deleteLinkRequestNotification = async (userId, actorId) => {
   try {
-    const result = await Notification.deleteOne({
+    const deletedNotification = await Notification.findOneAndDelete({
       userId: userId,
       type: 'SOCIAL_ACTIVITY',
       'source.id': actorId,
       title: 'New Link Request'
     });
 
-    return result;
+    if (!deletedNotification) {
+      return null; // nothing was deleted
+    }
+
+    // Convert to plain object and add notificationUpdate
+    const notificationObj = deletedNotification.toObject();
+    return {
+      ...notificationObj,
+      id: notificationObj._id.toString(), // alias _id → id
+      notificationUpdate: "DELETE"
+    };
   } catch (error) {
     console.error('Error deleting link request notification:', error);
     throw error;
   }
 };
+
+
 
 export const createPersonalizedSuggestion = (userId, curatorSource, title) =>
   createNotification({

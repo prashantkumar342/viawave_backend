@@ -25,7 +25,13 @@ export const notificationTypeDefs = gql`
     status: NotificationStatus!
     createdAt: String!
   }
-
+enum NotificationUpdate {
+    NEW,
+DELETED,
+READ,
+UPDATED,
+BATCH_DELETE
+  }
   enum NotificationType {
     PROMOTIONAL
     JOB_OPPORTUNITY

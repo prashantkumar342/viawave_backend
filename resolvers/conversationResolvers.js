@@ -1,7 +1,11 @@
+import {
+  createAndPublishNotificationSocialActivity,
+  NOTIFICATION_UPDATE_TYPES,
+  safeNotification
+} from '../helpers/notification.helper.js';
 import { Conversation as ConversationModel } from '../models/conversationModel.js';
 import { Message as MessageModel } from '../models/messageModel.js';
 import { User as UserModel } from '../models/userModel.js';
-import { createSocialActivity } from '../services/notifications.service.js';
 import { Logger } from '../utils/logger.js';
 import { pubsub } from '../utils/pubsub.js';
 import { requireAuth } from '../utils/requireAuth.js';
@@ -10,7 +14,6 @@ const messageTopic = (conversationId) =>
   `MESSAGE_RECEIVED_${String(conversationId)}`;
 
 const conversationTopic = (userId) => `CONVERSATION_${String(userId)}`;
-
 
 export const conversationResolvers = {
   Query: {
@@ -42,7 +45,7 @@ export const conversationResolvers = {
           conversations: data,
         };
       } catch (err) {
-        Logger.error(`⌐ myConversations error: ${err?.message || err}`);
+        Logger.error(`❌ myConversations error: ${err?.message || err}`);
         return {
           success: false,
           message: err?.message || 'Failed to fetch conversations',
@@ -98,7 +101,7 @@ export const conversationResolvers = {
           messages: data, // Newest first array
         };
       } catch (err) {
-        Logger.error(`⌐ getMessages error: ${err?.message || err}`);
+        Logger.error(`❌ getMessages error: ${err?.message || err}`);
         return {
           success: false,
           message: err?.message || 'Failed to fetch messages',
@@ -171,7 +174,7 @@ export const conversationResolvers = {
           conversations: sliced,
         };
       } catch (err) {
-        Logger.error(`⌐ searchConversation error: ${err?.message || err}`);
+        Logger.error(`❌ searchConversation error: ${err?.message || err}`);
         return {
           success: false,
           message: err?.message || 'Failed to search conversations',
@@ -196,7 +199,7 @@ export const conversationResolvers = {
         }
 
         // Ensure recipient exists
-        const recipient = await UserModel.findById(recipientId).select('_id');
+        const recipient = await UserModel.findById(recipientId).select('_id username name avatar');
         if (!recipient) throw new Error('404:Recipient not found');
 
         // Find or create conversation
@@ -205,6 +208,7 @@ export const conversationResolvers = {
           participants: { $all: [user._id, recipientId], $size: 2 },
         });
 
+        let isNewConversation = false;
         if (!conversation) {
           conversation = await ConversationModel.create({
             type: 'PRIVATE',
@@ -215,6 +219,8 @@ export const conversationResolvers = {
           conversation.unreadCounts.set(String(user._id), 0);
           conversation.unreadCounts.set(String(recipientId), 0);
           await conversation.save();
+          isNewConversation = true;
+
           // 🔔 Notify both users that a new conversation was created
           for (const participantId of conversation.participants) {
             pubsub.publish(conversationTopic(participantId), {
@@ -224,20 +230,21 @@ export const conversationResolvers = {
               },
             });
           }
-          // push notification of new conversation can be added here
-          try {
-            await createSocialActivity(
-              recipientId,           // notification goes to receiver
-              user._id,               // actor ID
-              user.username || user.name || 'Someone',  // actor name
-              user.avatar || null,    // actor avatar
-              "New Conversation",     // title
-              `${user.username || user.name || 'Someone'} sent you a message!`  // description
+
+          // ✅ Create and publish new conversation notification
+          await safeNotification(async () => {
+            await createAndPublishNotificationSocialActivity(
+              recipientId,
+              user._id,
+              user.username || user.name || 'Someone',
+              user.profilePicture || null,
+              'New Conversation',
+              `${user.username || user.name || 'Someone'} sent you a message!`,
+              'View Chat',
+              `${conversation._id}`,
+              NOTIFICATION_UPDATE_TYPES.NEW
             );
-          } catch (notificationError) {
-            Logger.error('❌ Failed to create notification:', notificationError);
-            // Don't fail the main operation if notification fails
-          }
+          }, 'New conversation notification');
         }
 
         // Prepare message document based on messageType
@@ -276,18 +283,22 @@ export const conversationResolvers = {
         }
 
         const created = await MessageModel.create(messageDoc);
-        try {
-          await createSocialActivity(
-            recipientId,           // notification goes to receiver
-            user._id,               // actor ID
-            user.username || user.name || 'Someone',  // actor name
-            user.avatar || null,    // actor avatar
-            "New Message",     // title
-            `${user.username || user.name || 'Someone'} sent you a message!`  // description
-          );
-        } catch (notificationError) {
-          Logger.error('❌ Failed to create notification:', notificationError);
-          // Don't fail the main operation if notification fails
+
+        // ✅ Create and publish new message notification (only if not a new conversation)
+        if (!isNewConversation) {
+          await safeNotification(async () => {
+            await createAndPublishNotificationSocialActivity(
+              recipientId,
+              user._id,
+              user.username || user.name || 'Someone',
+              user.profilePicture || null,
+              'New Message',
+              `${user.username || user.name || 'Someone'} sent you a message!`,
+              'View Message',
+              `${conversation._id}`,
+              NOTIFICATION_UPDATE_TYPES.NEW
+            );
+          }, 'New message notification');
         }
 
         // Update lastMessage and unreadCounts
@@ -366,7 +377,7 @@ export const conversationResolvers = {
           messageData: responseMessageData,
         };
       } catch (err) {
-        Logger.error(`⌐ sendMessage error: ${err?.message || err}`);
+        Logger.error(`❌ sendMessage error: ${err?.message || err}`);
         return {
           success: false,
           message: err?.message || 'Failed to send message',
@@ -509,19 +520,6 @@ export const conversationResolvers = {
     },
   },
 
-  // Subscription: {
-  //   messageReceived: {
-  //     subscribe: (_, { conversationId }) => {
-  //       return pubsub.asyncIterableIterator(messageTopic(conversationId));
-  //     },
-  //   },
-  //   conversationUpdated: {
-  //     subscribe: (_, { userId }) => {
-  //       console.log(`Subscribing to conversation updates for user ${userId}`);
-  //       return pubsub.asyncIterableIterator(conversationTopic(userId));
-  //     },
-  //   },
-  // },
   Subscription: {
     messageReceived: {
       subscribe: async (_, { conversationId }, context) => {

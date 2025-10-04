@@ -29,8 +29,68 @@ export const userLinkRequestTypeDefs = gql`
     totalLinks: Int
   }
 
+  type NotificationSource {
+    id: ID
+    name: String
+    avatarUrl: String
+  }
+
+  type NotificationAction {
+    label: String
+    url: String
+  }
+
+  type Notification {
+    id: ID!
+    userId: ID!
+    type: NotificationType!
+    source: NotificationSource
+    title: String!
+    description: String
+    imageUrl: String
+    action: NotificationAction
+    status: NotificationStatus!
+    createdAt: String!
+    notificationUpdate: NotificationUpdate!
+  }
+  enum NotificationUpdate {
+    NEW,
+DELETED,
+READ,
+UPDATED,
+BATCH_DELETE
+  }
+  enum NotificationType {
+    PROMOTIONAL
+    JOB_OPPORTUNITY
+    CONTENT_RECOMMENDATION
+    SOCIAL_ACTIVITY
+    PERSONALIZED_SUGGESTION
+    PROFILE_ACTIVITY
+  }
+
+  enum NotificationStatus {
+    UNREAD
+    READ
+  }
+
+  type NotificationResponse {
+    success: Boolean!
+    statusCode: Int!
+    message: String!
+    notifications: [Notification!]
+  }
+
+  type NotificationCountResponse {
+    success: Boolean!
+    statusCode: Int!
+    message: String!
+    count: Int!
+  }
+
   extend type Subscription {
     linkRequestUpdated(userId: ID!): UserLinkRequest!
+    notificationUpdateListen(userId: ID!): Notification!
   }
 
   extend type Mutation {
@@ -50,5 +110,6 @@ export const userLinkRequestResolvers = {
   },
   Subscription: {
     linkRequestUpdated: userLinkResolvers.Subscription.linkRequestUpdated,
+    notificationUpdateListen: userLinkResolvers.Subscription.notificationUpdateListen,
   },
 };

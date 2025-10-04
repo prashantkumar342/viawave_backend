@@ -1,10 +1,19 @@
-import { requireAuth } from '../utils/requireAuth.js';
+import {
+  createAndPublishNotificationSocialActivity,
+  deleteAndPublishNotification,
+  NOTIFICATION_UPDATE_TYPES,
+  notificationTopic,
+  safeNotification
+} from '../helpers/notification.helper.js';
 import { User as UserModel } from '../models/userModel.js';
 import { Logger } from '../utils/logger.js';
 import { pubsub } from '../utils/pubsub.js';
-import { createSocialActivity, deleteLinkRequestNotification } from '../services/notifications.service.js';
+import { requireAuth } from '../utils/requireAuth.js';
 
 const linkTopic = (userId) => `LINK_REQUEST_UPDATED_${String(userId)}`;
+
+// Re-export for backward compatibility
+export { notificationTopic as notificationUpdate } from '../helpers/notification.helper.js';
 
 export const userLinkResolvers = {
   Mutation: {
@@ -46,20 +55,20 @@ export const userLinkResolvers = {
         pubsub.publish(linkTopic(userIdStr), { linkRequestUpdated: senderView });
         pubsub.publish(linkTopic(receiverIdStr), { linkRequestUpdated: receiverView });
 
-        // Create notification for the receiver
-        try {
-          await createSocialActivity(
-            receiver._id,           // notification goes to receiver
-            user._id,               // actor ID
-            user.username || user.name || 'Someone',  // actor name
-            user.avatar || null,    // actor avatar
-            "New Link Request",     // title
-            `${user.username || user.name || 'Someone'} sent you a link request!`  // description
+        // ✅ Create and publish notification for the receiver
+        await safeNotification(async () => {
+          await createAndPublishNotificationSocialActivity(
+            receiver._id,
+            user._id,
+            user.username || user.name || 'Someone',
+            user.profilePicture || null,
+            'New Link Request',
+            `${user.username || user.name || 'Someone'} sent you a link request!`,
+            'Accept',
+            `${user._id}`,
+            NOTIFICATION_UPDATE_TYPES.NEW
           );
-        } catch (notificationError) {
-          Logger.error('❌ Failed to create notification:', notificationError);
-          // Don't fail the main operation if notification fails
-        }
+        }, 'Link request notification');
 
         return {
           success: true,
@@ -90,7 +99,7 @@ export const userLinkResolvers = {
           return { success: false, statusCode: 400, message: 'No link request found to withdraw' };
         }
 
-        // Remove IDs from sent/received lists...
+        // Remove IDs from sent/received lists
         user.sentLinks = user.sentLinks.filter(id => String(id) !== receiverIdStr);
         receiver.receivedLinks = receiver.receivedLinks.filter(id => String(id) !== userIdStr);
         await Promise.all([user.save(), receiver.save()]);
@@ -108,12 +117,10 @@ export const userLinkResolvers = {
         pubsub.publish(linkTopic(userIdStr), { linkRequestUpdated: linkUpdate });
         pubsub.publish(linkTopic(receiverIdStr), { linkRequestUpdated: linkUpdate });
 
-        // Create notification for the receiver about withdrawal
-        try {
-          await deleteLinkRequestNotification(receiver._id, user._id);
-        } catch (notificationError) {
-          Logger.error('❌ Failed to delete notification:', notificationError);
-        }
+        // ✅ Delete and publish notification removal
+        await safeNotification(async () => {
+          await deleteAndPublishNotification(receiver._id, user._id);
+        }, 'Link request withdrawal notification');
 
         return { success: true, statusCode: 200, message: 'Link request withdrawn successfully.', linkRequest: linkUpdate };
       } catch (err) {
@@ -182,12 +189,10 @@ export const userLinkResolvers = {
         pubsub.publish(linkTopic(userIdStr), { linkRequestUpdated: linkUpdateForReceiver });
         pubsub.publish(linkTopic(senderIdStr), { linkRequestUpdated: linkUpdateForSender });
 
-        // Delete the original link request notification since it's accepted
-        try {
-          await deleteLinkRequestNotification(user._id, sender._id);
-        } catch (notificationError) {
-          Logger.error('❌ Failed to delete original notification:', notificationError);
-        }
+        // ✅ Delete the original link request notification since it's accepted
+        await safeNotification(async () => {
+          await deleteAndPublishNotification(user._id, sender._id);
+        }, 'Link request acceptance notification deletion');
 
         return {
           success: true,
@@ -237,12 +242,10 @@ export const userLinkResolvers = {
         pubsub.publish(linkTopic(userIdStr), { linkRequestUpdated: linkUpdate });
         pubsub.publish(linkTopic(senderIdStr), { linkRequestUpdated: linkUpdate });
 
-        // Delete the original link request notification since it's rejected
-        try {
-          await deleteLinkRequestNotification(user._id, sender._id);
-        } catch (notificationError) {
-          Logger.error('❌ Failed to delete original notification:', notificationError);
-        }
+        // ✅ Delete the original link request notification since it's rejected
+        await safeNotification(async () => {
+          await deleteAndPublishNotification(user._id, sender._id);
+        }, 'Link request rejection notification deletion');
 
         return {
           success: true,
@@ -319,6 +322,12 @@ export const userLinkResolvers = {
   Subscription: {
     linkRequestUpdated: {
       subscribe: (_, { userId }) => pubsub.asyncIterableIterator(linkTopic(userId)),
+    },
+    notificationUpdateListen: {
+      subscribe: (_, { userId }) => {
+
+        return pubsub.asyncIterableIterator(notificationTopic(userId));
+      }
     }
   }
-};
+}
