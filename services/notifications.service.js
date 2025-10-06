@@ -1,5 +1,6 @@
 import { Notification } from "../models/notificationModel.js";
 import { pushNotifications } from "./pushNotifications.service.js";
+import { decrementUnread, incrementUnread } from './userUnreads.services.js';
 
 const { sendToUser } = pushNotifications();
 
@@ -16,7 +17,7 @@ export const createNotification = async (data) => {
     });
 
     await notif.save();
-
+    await incrementUnread(data.userId, 'notifications', 1);
     // Send push notification if user ID and message exist
     if (data.userId && data.title) {
       await sendToUser(data.userId, data.title, data.description);
@@ -74,7 +75,7 @@ export const createSocialActivity = (userId, actorId, actorName, actorAvatar, ti
 // Delete notification by user and actor (for link request withdrawals)
 export const deleteLinkRequestNotification = async (userId, actorId) => {
   try {
-    const deletedNotification = await Notification.findOneAndDelete({
+    const deletedNotification = await Notification.findOne({
       userId: userId,
       type: 'SOCIAL_ACTIVITY',
       'source.id': actorId,
@@ -82,14 +83,20 @@ export const deleteLinkRequestNotification = async (userId, actorId) => {
     });
 
     if (!deletedNotification) {
-      return null; // nothing was deleted
+      return null;
     }
 
-    // Convert to plain object and add notificationUpdate
+    // ✅ Decrement unread count if it was unread
+    if (deletedNotification.status === 'UNREAD') {
+      await decrementUnread(userId, 'notifications', 1);
+    }
+
+    await deletedNotification.deleteOne();
+
     const notificationObj = deletedNotification.toObject();
     return {
       ...notificationObj,
-      id: notificationObj._id.toString(), // alias _id → id
+      id: notificationObj._id.toString(),
       notificationUpdate: "DELETE"
     };
   } catch (error) {
@@ -153,7 +160,9 @@ export const markAsRead = async (notificationIds, userId) => {
       },
       { $set: { status: 'READ' } }
     );
-
+    if (result.modifiedCount > 0) {
+      await decrementUnread(userId, 'notifications', result.modifiedCount);
+    }
     return result;
   } catch (error) {
     console.error('Error marking notifications as read:', error);
@@ -167,7 +176,9 @@ export const markAllAsRead = async (userId) => {
       { userId: userId, status: 'UNREAD' },
       { $set: { status: 'READ' } }
     );
-
+    if (result.modifiedCount > 0) {
+      await decrementUnread(userId, 'notifications', result.modifiedCount);
+    }
     return result;
   } catch (error) {
     console.error('Error marking all notifications as read:', error);
@@ -177,10 +188,20 @@ export const markAllAsRead = async (userId) => {
 
 export const deleteNotification = async (notificationId, userId) => {
   try {
+    const notification = await Notification.findOne({
+      _id: notificationId,
+      userId: userId
+    });
+
     const result = await Notification.deleteOne({
       _id: notificationId,
       userId: userId
     });
+
+    // ✅ Decrement unread count if the deleted notification was unread
+    if (result.deletedCount > 0 && notification?.status === 'UNREAD') {
+      await decrementUnread(userId, 'notifications', 1);
+    }
 
     return result;
   } catch (error) {
@@ -191,7 +212,14 @@ export const deleteNotification = async (notificationId, userId) => {
 
 export const deleteAllNotifications = async (userId) => {
   try {
+    const unreadCount = await Notification.countDocuments({
+      userId: userId,
+      status: 'UNREAD'
+    });
     const result = await Notification.deleteMany({ userId });
+    if (unreadCount > 0) {
+      await decrementUnread(userId, 'notifications', unreadCount);
+    }
     return result;
   } catch (error) {
     console.error('Error deleting all notifications:', error);
