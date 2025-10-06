@@ -6,9 +6,15 @@ import {
   login,
   register,
   sendOTP,
+  validateUserSession
 } from '../resolvers/userAuth.js';
 
 export const userTypeDefs = gql`
+  type UserUnreads {
+    notificationsUnreads: Int
+    messagesUnreads: Int
+  }
+
   type User {
     id: ID!
     username: String!
@@ -26,6 +32,9 @@ export const userTypeDefs = gql`
     googleId: String
     createdAt: String
     updatedAt: String
+
+    # 🔹 New field for badge counts
+    userUnreads: UserUnreads
   }
 
   input EditProfileInput {
@@ -34,7 +43,7 @@ export const userTypeDefs = gql`
     dob: String
     gender: String
     bio: String
-    profilePictureFile: String # Base64 encoded file
+    profilePictureFile: String
   }
 
   type OTPResponse {
@@ -57,6 +66,7 @@ export const userTypeDefs = gql`
     token: String
     userData: User
   }
+
   type AuthResponse {
     success: Boolean!
     message: String!
@@ -74,7 +84,10 @@ export const userTypeDefs = gql`
 
   extend type Query {
     _user: String
+    validateUserSession: loginResponse!
   }
+
+
 
   extend type Mutation {
     register(
@@ -83,17 +96,25 @@ export const userTypeDefs = gql`
       password: String!
       otp: Int!
     ): registerResponse!
-    login(email: String!, password: String!, fcmToken: String!): loginResponse!
+
+    login(
+      email: String!
+      password: String!
+      fcmToken: String!
+    ): loginResponse!
+
     googleAuth(idToken: String!): AuthResponse!
+
     sendOTP(email: String!): OTPResponse
+
     editProfile(
-  username: String
-  fullName: String
-  dob: String
-  gender: String
-  bio: String
-  profilePicture: String
-): editProfileResponse!
+      username: String
+      fullName: String
+      dob: String
+      gender: String
+      bio: String
+      profilePicture: String
+    ): editProfileResponse!
   }
 `;
 
@@ -105,4 +126,8 @@ export const userResolvers = {
     googleAuth,
     editProfile,
   },
+  Query: {
+    _user: () => 'User Query Works!',
+    validateUserSession: validateUserSession,
+  }
 };

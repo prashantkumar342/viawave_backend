@@ -37,6 +37,16 @@ const userSchema = new mongoose.Schema(
     dob: {
       type: Date,
     },
+    userUnreads: {
+      notificationsUnreads: {
+        type: Number,
+        default: 0,
+      },
+      messagesUnreads: {
+        type: Number,
+        default: 0,
+      },
+    },
     gender: {
       type: String,
       enum: ['male', 'female', 'other', 'Male', 'Female', 'Other'],

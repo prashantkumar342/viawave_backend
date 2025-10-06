@@ -17,6 +17,7 @@ import { feedsResolvers, feedTypeDefs } from './feedSchema.js';
 import { interactionResolvers, interactionTypeDefs } from './interactionSchema.js';
 import { postSchemaResolvers, postTypeDefs } from './postSchema.js';
 import { userModerationResolvers, userModerationTypeDefs } from './userModerationSchema.js';
+import { userUnreadsResolver, userUnreadsTypeDefs } from './userUnreadsSchema.js';
 
 const rootTypeDefs = `#graphql
 type Query {
@@ -43,7 +44,8 @@ export const typeDefs = mergeTypeDefs([
   notificationTypeDefs,
   userModerationTypeDefs,
   feedTypeDefs,
-  interactionTypeDefs
+  interactionTypeDefs,
+  userUnreadsTypeDefs
 ]);
 export const resolvers = mergeResolvers([
   userResolvers,
@@ -54,5 +56,6 @@ export const resolvers = mergeResolvers([
   notificationsResolvers,
   userModerationResolvers,
   feedsResolvers,
-  interactionResolvers
+  interactionResolvers,
+  userUnreadsResolver
 ]);

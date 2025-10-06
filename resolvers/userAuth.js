@@ -2,11 +2,13 @@
 import { OAuth2Client } from 'google-auth-library';
 
 import { sendMail } from '../config/mailConfig.js';
+import { syncUserUnreads } from '../helpers/syncUserUnreads.helper.js';
 import { Otp as otpModel } from '../models/otpMode.js';
 import { User as userModel } from '../models/userModel.js';
 import { otpMailTemplate } from '../templates/otpMailTemplate.js';
 import generateOTP from '../utils/generateOtp.js';
 import generateToken from '../utils/generateToken.js';
+import { requireAuth } from '../utils/requireAuth.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID_WEB);
 
@@ -199,7 +201,7 @@ export const login = async (_, { email, password, fcmToken }, { res }) => {
     }
 
     const token = generateToken(user);
-
+    await syncUserUnreads(user._id);
     // Set cookie for web clients
     if (res) {
       res.cookie('waveToken', token, {
@@ -300,6 +302,44 @@ export const editProfile = async (
       success: false,
       message: 'Failed to update profile',
       statusCode: 500,
+    };
+  }
+};
+
+export const validateUserSession = async (_, __, { req }) => {
+  try {
+    const currentUser = await requireAuth(req); // verify JWT and return user
+
+    const user = await userModel.findById(currentUser._id).select('-password');
+    if (!user) {
+      return {
+        success: false,
+        message: 'User not found',
+        statusCode: 404,
+      };
+    }
+    await syncUserUnreads(user._id);
+    // Optional: refresh token if near expiry
+    // const newToken = generateToken(user);
+
+    // Include badge counts, etc.
+    const userObj = user.toObject();
+    userObj.id = userObj._id;
+    userObj.totalLinks = user?.links.length || 0;
+
+    return {
+      success: true,
+      message: 'User session is valid',
+      statusCode: 200,
+      token: req.headers.authorization?.split(' ')[1] || user.token,
+      userData: userObj,
+    };
+  } catch (error) {
+    console.error('Session validation failed:', error);
+    return {
+      success: false,
+      message: 'Invalid or expired session',
+      statusCode: 401,
     };
   }
 };

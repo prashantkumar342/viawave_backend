@@ -4,6 +4,8 @@ import {
   safeNotification
 } from '../helpers/notification.helper.js';
 import { Conversation as ConversationModel } from '../models/conversationModel.js';
+import { decrementUnread, incrementUnread } from '../services/userUnreads.services.js';
+
 import { Message as MessageModel } from '../models/messageModel.js';
 import { User as UserModel } from '../models/userModel.js';
 import { Logger } from '../utils/logger.js';
@@ -283,7 +285,7 @@ export const conversationResolvers = {
         }
 
         const created = await MessageModel.create(messageDoc);
-
+        await incrementUnread(recipientId, 'messages', 1);
         // ✅ Create and publish new message notification (only if not a new conversation)
         if (!isNewConversation) {
           await safeNotification(async () => {
@@ -429,7 +431,12 @@ export const conversationResolvers = {
           conversation.unreadCounts[userId] = 0;
         }
         await conversation.save();
-
+        await MessageModel.countDocuments({
+          conversation: conversationId,
+          seenBy: { $ne: userId },
+          sender: { $ne: userId }, // Don't count own messages
+        });
+        await decrementUnread(userId, 'messages', result.modifiedCount);
         // 🔔 Publish conversation update (unread count changed)
         pubsub.publish(conversationTopic(userId), {
           conversationUpdated: {
