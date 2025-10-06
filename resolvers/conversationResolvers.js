@@ -386,6 +386,89 @@ export const conversationResolvers = {
         };
       }
     },
+    // Mark messages as seen by the current user
+    seenMessage: async (_, { conversationId, messageIds }, context) => {
+      try {
+        const user = await requireAuth(context.req);
+        const userId = String(user._id);
+
+        if (!conversationId) throw new Error("400:conversationId is required");
+
+        // Find conversation and check if the user is a participant
+        const conversation = await ConversationModel.findById(conversationId);
+        if (!conversation) throw new Error("404:Conversation not found");
+
+        const isParticipant = conversation.participants
+          .map((id) => String(id))
+          .includes(userId);
+        if (!isParticipant) {
+          throw new Error("403:You are not a participant of this conversation");
+        }
+
+        // Build query (specific messages or all unseen in that conversation)
+        const filter = {
+          conversation: conversationId,
+          seenBy: { $ne: userId },
+        };
+        if (Array.isArray(messageIds) && messageIds.length > 0) {
+          filter._id = { $in: messageIds };
+        }
+
+        // Update all unseen messages for this user
+        const result = await MessageModel.updateMany(filter, {
+          $addToSet: { seenBy: userId },
+        });
+
+        // Reset unread count for this user in that conversation
+        if (
+          conversation.unreadCounts &&
+          typeof conversation.unreadCounts.get === "function"
+        ) {
+          conversation.unreadCounts.set(userId, 0);
+        } else if (conversation.unreadCounts) {
+          conversation.unreadCounts[userId] = 0;
+        }
+        await conversation.save();
+
+        // 🔔 Publish conversation update (unread count changed)
+        pubsub.publish(conversationTopic(userId), {
+          conversationUpdated: {
+            ...conversation.toObject(),
+            id: conversation._id,
+          },
+        });
+
+        // 🔔 Publish message update to notify participants that messages were seen
+        // for (const participantId of conversation.participants) {
+        //   const isSenderYou = String(participantId) === userId;
+        //   pubsub.publish(messageTopic(conversationId), {
+        //     messageReceived: {
+        //       seenUpdate: true,
+        //       conversationId,
+        //       seenBy: userId,
+        //       messageIds: messageIds || [],
+        //       isSenderYou,
+        //     },
+        //   });
+        // }
+
+        return {
+          success: true,
+          message: "Messages marked as seen successfully",
+          statusCode: 200,
+          seenCount: result.modifiedCount,
+        };
+      } catch (err) {
+        Logger.error(`❌ seenMessage error: ${err?.message || err}`);
+        return {
+          success: false,
+          message: err?.message || "Failed to mark messages as seen",
+          statusCode: 500,
+          seenCount: 0,
+        };
+      }
+    },
+
   },
 
   Conversation: {

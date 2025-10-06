@@ -37,6 +37,13 @@ export const userConversationTypeDefs = gql`
     updatedAt: String!
   }
 
+  type SeenMessageResponse {
+  success: Boolean!
+  message: String!
+  statusCode: Int!
+  seenCount: Int!
+  }
+
   type UnreadCount {
     userId: ID!
     count: Int!
@@ -84,11 +91,8 @@ export const userConversationTypeDefs = gql`
   }
 
   extend type Mutation {
-    sendMessage(
-      recipientId: ID!
-      message: String!
-      messageType: String!
-    ): SendMessageResponse!
+    sendMessage(recipientId: ID!, message: String!, messageType: String!): SendMessageResponse!
+    seenMessage(conversationId: ID!, messageIds: [ID!]): SeenMessageResponse!
   }
 `;
 
@@ -116,6 +120,7 @@ export const userConversationResolvers = {
   },
   Mutation: {
     sendMessage: conversationResolvers.Mutation.sendMessage,
+    seenMessage: conversationResolvers.Mutation.seenMessage,
   },
   Subscription: {
     messageReceived: conversationResolvers.Subscription.messageReceived,
