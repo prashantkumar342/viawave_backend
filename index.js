@@ -116,7 +116,12 @@ async function startServer() {
       context: async ({ req, res }) => {
         let user = null;
         try {
-          if (req) {
+          // Only run requireAuth if not register mutation
+          if (
+            req &&
+            req.body &&
+            req.body.operationName !== 'Register' // <-- Adjust to your mutation name
+          ) {
             user = await requireAuth(req);
           }
         } catch (err) {
@@ -124,7 +129,6 @@ async function startServer() {
         }
         return { req, res, user };
       },
-      // Disable built-in file upload handling since we're using graphql-upload-minimal
       uploads: false,
     });
 
