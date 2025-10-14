@@ -1,4 +1,4 @@
-import { createSocialActivity, deleteLinkRequestNotification } from '../services/notifications.service.js';
+import { createSocialActivity, deleteLinkRequestNotification, deleteNotification, markAsRead } from '../services/notifications.service.js';
 import { Logger } from '../utils/logger.js';
 import { pubsub } from '../utils/pubsub.js';
 
@@ -87,7 +87,7 @@ export async function createAndPublishNotificationSocialActivity(
  * @param {string} actorId - User ID who triggered the notification
  * @returns {Promise<Object>} The published notification deletion object
  */
-export async function deleteAndPublishNotification(recipientId, actorId) {
+export async function deleteLinkRequestAndPublishNotification(recipientId, actorId) {
   try {
     const result = await deleteLinkRequestNotification(recipientId, actorId);
 
@@ -114,6 +114,26 @@ export async function deleteAndPublishNotification(recipientId, actorId) {
   }
 }
 
+export async function deleteNotificationAndPublish(notificationId, userId) {
+  try {
+    const result = await deleteNotification(notificationId, userId);
+    const notificationObj = result.toObject ? result.toObject() : result;
+    const notification = {
+      ...notificationObj,
+      id: notificationObj._id?.toString() || notificationObj.id,
+      notificationUpdate: NOTIFICATION_UPDATE_TYPES.DELETED
+    };
+    pubsub.publish(notificationTopic(userId), {
+      notificationUpdateListen: notification
+    });
+    Logger.info(`✅ Notification deletion published for user ${userId}`);
+    return notification;
+  } catch (error) {
+    Logger.error('❌ Failed to delete/publish notification:', error);
+    throw error;
+  }
+}
+
 /**
  * Wrapper for non-critical notification operations
  * Catches errors and logs them without throwing
@@ -127,5 +147,32 @@ export async function safeNotification(notificationFn, context = 'Notification o
   } catch (error) {
     Logger.error(`❌ ${context} failed:`, error);
     // Don't throw - notifications should not break main operations
+  }
+}
+
+export async function markNotificationAsReadAndPublish(notificationId, userId) {
+  try {
+    const result = await markAsRead(notificationId, userId);
+    const notificationObj = result.toObject ? result.toObject() : result;
+    const notification = {
+      ...notificationObj,
+      id: notificationObj._id?.toString() || notificationObj.id,
+      notificationUpdate: NOTIFICATION_UPDATE_TYPES.READ
+    };
+
+    pubsub.publish(notificationTopic(userId), {
+      notificationUpdateListen: notification
+    });
+
+    console.log(notification)
+
+    Logger.info(`✅ Notification marked as read and published for user ${userId}`);
+    return notification;
+
+
+  } catch (error) {
+    Logger.error('❌ Failed to mark notification as read and publish:', error);
+    throw error;
+
   }
 }

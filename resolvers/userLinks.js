@@ -1,6 +1,6 @@
 import {
   createAndPublishNotificationSocialActivity,
-  deleteAndPublishNotification,
+  deleteLinkRequestAndPublishNotification,
   NOTIFICATION_UPDATE_TYPES,
   notificationTopic,
   safeNotification
@@ -119,7 +119,7 @@ export const userLinkResolvers = {
 
         // ✅ Delete and publish notification removal
         await safeNotification(async () => {
-          await deleteAndPublishNotification(receiver._id, user._id);
+          await deleteLinkRequestAndPublishNotification(receiver._id, user._id);
         }, 'Link request withdrawal notification');
 
         return { success: true, statusCode: 200, message: 'Link request withdrawn successfully.', linkRequest: linkUpdate };
@@ -191,7 +191,7 @@ export const userLinkResolvers = {
 
         // ✅ Delete the original link request notification since it's accepted
         await safeNotification(async () => {
-          await deleteAndPublishNotification(user._id, sender._id);
+          await deleteLinkRequestAndPublishNotification(user._id, sender._id);
         }, 'Link request acceptance notification deletion');
 
         return {
@@ -244,7 +244,7 @@ export const userLinkResolvers = {
 
         // ✅ Delete the original link request notification since it's rejected
         await safeNotification(async () => {
-          await deleteAndPublishNotification(user._id, sender._id);
+          await deleteLinkRequestAndPublishNotification(user._id, sender._id);
         }, 'Link request rejection notification deletion');
 
         return {

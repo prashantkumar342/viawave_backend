@@ -1,13 +1,12 @@
-import { requireAuth } from '../utils/requireAuth.js';
-import { Logger } from '../utils/logger.js';
+import { deleteNotificationAndPublish, markNotificationAsReadAndPublish } from '../helpers/notification.helper.js';
 import {
-  getNotifications,
-  markAsRead,
-  markAllAsRead,
-  deleteNotification,
   deleteAllNotifications,
-  getUnreadCount
+  getNotifications,
+  getUnreadCount,
+  markAllAsRead,
 } from '../services/notifications.service.js';
+import { Logger } from '../utils/logger.js';
+import { requireAuth } from '../utils/requireAuth.js';
 
 export const notificationResolvers = {
   Query: {
@@ -79,7 +78,7 @@ export const notificationResolvers = {
           };
         }
 
-        const result = await markAsRead(notificationIds, user._id);
+        const result = await markNotificationAsReadAndPublish(notificationIds, user._id);
 
         return {
           success: true,
@@ -130,7 +129,9 @@ export const notificationResolvers = {
           };
         }
 
-        const result = await deleteNotification(notificationId, user._id);
+        // const result = await deleteNotification(notificationId, user._id);
+        const result = await deleteNotificationAndPublish(notificationId, user._id)
+        console.log(result)
 
         if (result.deletedCount === 0) {
           return {

@@ -151,19 +151,13 @@ export const getNotifications = async (userId, limit, offset, status = null) => 
   }
 };
 
-export const markAsRead = async (notificationIds, userId) => {
+export const markAsRead = async (notificationId, userId) => {
   try {
-    const result = await Notification.updateMany(
-      {
-        _id: { $in: notificationIds },
-        userId: userId
-      },
-      { $set: { status: 'READ' } }
-    );
+    const result = await Notification.findByIdAndUpdate(notificationId, { $set: { status: 'READ' } })
     if (result.modifiedCount > 0) {
       await decrementUnread(userId, 'notifications', result.modifiedCount);
     }
-    return result;
+    return { ...result.toObject(), notificationUpdate: 'READ' };
   } catch (error) {
     console.error('Error marking notifications as read:', error);
     throw error;
@@ -188,27 +182,32 @@ export const markAllAsRead = async (userId) => {
 
 export const deleteNotification = async (notificationId, userId) => {
   try {
-    const notification = await Notification.findOne({
+    // 🔍 Find and delete in one step — returns the deleted document!
+    const deletedNotification = await Notification.findOneAndDelete({
       _id: notificationId,
-      userId: userId
+      userId: userId,
     });
 
-    const result = await Notification.deleteOne({
-      _id: notificationId,
-      userId: userId
-    });
+    if (!deletedNotification) {
+      throw new Error('Notification not found or already deleted');
+    }
 
     // ✅ Decrement unread count if the deleted notification was unread
-    if (result.deletedCount > 0 && notification?.status === 'UNREAD') {
+    if (deletedNotification.status === 'UNREAD') {
       await decrementUnread(userId, 'notifications', 1);
     }
 
-    return result;
+    // ✅ Optionally add your custom field (like notificationUpdate)
+    return {
+      ...deletedNotification.toObject(),
+      notificationUpdate: 'DELETED',
+    };
   } catch (error) {
-    console.error('Error deleting notification:', error);
+    console.error('❌ Error deleting notification:', error);
     throw error;
   }
 };
+
 
 export const deleteAllNotifications = async (userId) => {
   try {
