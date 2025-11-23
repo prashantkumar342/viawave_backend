@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+
 import { User } from '../models/userModel.js';
 import { Logger } from './logger.js';
 
@@ -25,7 +26,7 @@ export const requireAuth = async (source) => {
     token = source.startsWith('Bearer ') ? source.slice(7) : source;
   }
 
-  console.log('Auth Token:', token ? '***' + token.slice(-8) : 'NOT_FOUND');
+  // console.log('Auth Token:', token ? '***' + token.slice(-8) : 'NOT_FOUND');
 
   if (!token) {
     Logger.warn('No token provided in request');
@@ -40,7 +41,7 @@ export const requireAuth = async (source) => {
       throw new Error('401:User not found');
     }
 
-    Logger.info(`✅ Auth success for user: ${user.username || user._id}`);
+    // Logger.info(`✅ Auth success for user: ${user.username || user._id}`);
     return user; // ✅ Valid authenticated user
   } catch (err) {
     Logger.error(`401:Invalid or expired token -> ${err.message}`);

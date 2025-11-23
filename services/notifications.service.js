@@ -1,5 +1,5 @@
-import { Notification } from "../models/notificationModel.js";
-import { pushNotifications } from "./pushNotifications.service.js";
+import { Notification } from '../models/notificationModel.js';
+import { pushNotifications } from './pushNotifications.service.js';
 import { decrementUnread, incrementUnread } from './userUnreads.services.js';
 
 const { sendToUser } = pushNotifications();
@@ -30,46 +30,73 @@ export const createNotification = async (data) => {
   }
 };
 
-export const createPromotional = (userId, title, description, actionLabel, actionUrl) =>
+export const createPromotional = (
+  userId,
+  title,
+  description,
+  actionLabel,
+  actionUrl
+) =>
   createNotification({
     userId,
     type: 'PROMOTIONAL',
     title,
     description,
-    action: { label: actionLabel, url: actionUrl }
+    action: { label: actionLabel, url: actionUrl },
   });
 
-export const createJobOpportunity = (userId, companySource, title, description, actionLabel, actionUrl) =>
+export const createJobOpportunity = (
+  userId,
+  companySource,
+  title,
+  description,
+  actionLabel,
+  actionUrl
+) =>
   createNotification({
     userId,
     type: 'JOB_OPPORTUNITY',
     source: companySource,
     title,
     description,
-    action: { label: actionLabel, url: actionUrl }
+    action: { label: actionLabel, url: actionUrl },
   });
 
-export const createContentRecommendation = (userId, publisherSource, title, imageUrl) =>
+export const createContentRecommendation = (
+  userId,
+  publisherSource,
+  title,
+  imageUrl
+) =>
   createNotification({
     userId,
     type: 'CONTENT_RECOMMENDATION',
     source: publisherSource,
     title,
-    imageUrl
+    imageUrl,
   });
 
-export const createSocialActivity = (userId, actorId, actorName, actorAvatar, title, description, actionLabel, actionUrl) =>
+export const createSocialActivity = (
+  userId,
+  actorId,
+  actorName,
+  actorAvatar,
+  title,
+  description,
+  actionLabel,
+  actionUrl
+) =>
   createNotification({
     userId,
     type: 'SOCIAL_ACTIVITY',
     source: {
       id: actorId,
       name: actorName,
-      avatarUrl: actorAvatar
+      avatarUrl: actorAvatar,
     },
     title,
     description,
-    action: { label: actionLabel, url: actionUrl }
+    action: { label: actionLabel, url: actionUrl },
   });
 
 // Delete notification by user and actor (for link request withdrawals)
@@ -79,7 +106,7 @@ export const deleteLinkRequestNotification = async (userId, actorId) => {
       userId: userId,
       type: 'SOCIAL_ACTIVITY',
       'source.id': actorId,
-      title: 'New Link Request'
+      title: 'New Link Request',
     });
 
     if (!deletedNotification) {
@@ -97,7 +124,7 @@ export const deleteLinkRequestNotification = async (userId, actorId) => {
     return {
       ...notificationObj,
       id: notificationObj._id.toString(),
-      notificationUpdate: "DELETE"
+      notificationUpdate: 'DELETE',
     };
   } catch (error) {
     console.error('Error deleting link request notification:', error);
@@ -105,27 +132,39 @@ export const deleteLinkRequestNotification = async (userId, actorId) => {
   }
 };
 
-
-
 export const createPersonalizedSuggestion = (userId, curatorSource, title) =>
   createNotification({
     userId,
     type: 'PERSONALIZED_SUGGESTION',
     source: curatorSource,
-    title
+    title,
   });
 
-export const createProfileActivity = (userId, title, description, actionLabel, actionUrl) =>
+export const createProfileActivity = (
+  userId,
+  title,
+  description,
+  actionLabel,
+  actionUrl
+) =>
   createNotification({
     userId,
     type: 'PROFILE_ACTIVITY',
     title,
     description,
-    action: actionLabel && actionUrl ? { label: actionLabel, url: actionUrl } : undefined
+    action:
+      actionLabel && actionUrl
+        ? { label: actionLabel, url: actionUrl }
+        : undefined,
   });
 
 // Updated to use offset instead of skip
-export const getNotifications = async (userId, limit, offset, status = null) => {
+export const getNotifications = async (
+  userId,
+  limit,
+  offset,
+  status = null
+) => {
   try {
     const filter = { userId };
     if (status) filter.status = status;
@@ -137,27 +176,51 @@ export const getNotifications = async (userId, limit, offset, status = null) => 
       .lean();
 
     // Add id field as string for each notification (for GraphQL)
-    return notifications.map(n => ({
+    return notifications.map((n) => ({
       ...n,
       id: n._id.toString(),
       userId: n.userId ? n.userId.toString() : null,
       source: n.source
         ? { ...n.source, id: n.source.id ? n.source.id.toString() : null }
-        : undefined
+        : undefined,
     }));
   } catch (error) {
-    console.error("Error fetching notifications", error);
+    console.error('Error fetching notifications', error);
     throw error;
   }
 };
 
+// notifications.service.js  — replace markAsRead implementation
 export const markAsRead = async (notificationId, userId) => {
   try {
-    const result = await Notification.findByIdAndUpdate(notificationId, { $set: { status: 'READ' } })
-    if (result.modifiedCount > 0) {
-      await decrementUnread(userId, 'notifications', result.modifiedCount);
+    // Load the notification first
+    const notif = await Notification.findById(notificationId);
+
+    if (!notif) {
+      throw new Error('Notification not found');
     }
-    return { ...result.toObject(), notificationUpdate: 'READ' };
+
+    // Only act if it was UNREAD and belongs to the expected user
+    if (notif.userId?.toString() !== userId?.toString()) {
+      throw new Error('Notification does not belong to the user');
+    }
+
+    if (notif.status === 'UNREAD') {
+      // Update status to READ
+      const updated = await Notification.findByIdAndUpdate(
+        notificationId,
+        { $set: { status: 'READ' } },
+        { new: true }
+      );
+
+      // Safely decrement unread count by 1
+      await decrementUnread(userId, 'notifications', 1);
+
+      return { ...updated.toObject(), notificationUpdate: 'READ' };
+    }
+
+    // If already read, just return the current doc with flag
+    return { ...notif.toObject(), notificationUpdate: 'ALREADY_READ' };
   } catch (error) {
     console.error('Error marking notifications as read:', error);
     throw error;
@@ -171,7 +234,7 @@ export const markAllAsRead = async (userId) => {
       { $set: { status: 'READ' } }
     );
     if (result.modifiedCount > 0) {
-      await decrementUnread(userId, 'notifications', result.modifiedCount);
+      await decrementUnread(userId, 'notifications', result?.modifiedCount);
     }
     return result;
   } catch (error) {
@@ -208,12 +271,11 @@ export const deleteNotification = async (notificationId, userId) => {
   }
 };
 
-
 export const deleteAllNotifications = async (userId) => {
   try {
     const unreadCount = await Notification.countDocuments({
       userId: userId,
-      status: 'UNREAD'
+      status: 'UNREAD',
     });
     const result = await Notification.deleteMany({ userId });
     if (unreadCount > 0) {
@@ -230,7 +292,7 @@ export const getUnreadCount = async (userId) => {
   try {
     const count = await Notification.countDocuments({
       userId: userId,
-      status: 'UNREAD'
+      status: 'UNREAD',
     });
 
     return count;

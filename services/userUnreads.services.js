@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
+
 import { User } from '../models/userModel.js';
 import { pubsub } from '../utils/pubsub.js';
-
 
 // Helper functions
 const validateUserId = (userId) => {
@@ -19,7 +19,9 @@ const validateUnreadType = (type) => {
     throw new Error('Unread type is required');
   }
   if (!validTypes.includes(type)) {
-    throw new Error(`Invalid unread type. Must be one of: ${validTypes.join(', ')}`);
+    throw new Error(
+      `Invalid unread type. Must be one of: ${validTypes.join(', ')}`
+    );
   }
 };
 
@@ -323,4 +325,3 @@ export const getTotalUserUnreads = async (userId) => {
 
 // Export pubsub instance and event constant for GraphQL resolvers
 export { pubsub, UNREADS_UPDATED };
-
