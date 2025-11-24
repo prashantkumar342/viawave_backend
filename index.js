@@ -4,16 +4,18 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
-import { graphqlUploadExpress } from "graphql-upload-minimal";
+import { graphqlUploadExpress } from 'graphql-upload-minimal';
 import { useServer } from 'graphql-ws/use/ws';
 import http from 'http';
+import { get } from 'mongoose';
 import path from 'path';
 import { WebSocketServer } from 'ws';
-import indexRouter from './routes/routes.js';
 
 import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
+import indexRouter from './routes/routes.js';
 import { Logger } from './utils/logger.js';
+import { getPresignedUrl } from './utils/presignedUrl.js';
 import { requireAuth } from './utils/requireAuth.js';
 
 // ----------------------
@@ -65,7 +67,6 @@ const createWebSocketContext = async (ctx) => {
     const user = await requireAuth({ token });
 
     return { user, authenticated: true, req: { token } }; // Include req-like object
-
   } catch (error) {
     Logger.error('WS auth error:', error.message);
     return { user: null, authenticated: false };
@@ -95,10 +96,13 @@ async function startServer() {
     app.use(cookieParser());
 
     // Add graphql upload middleware BEFORE Apollo Server
-    app.use('/graphql', graphqlUploadExpress({
-      maxFileSize: 50_000_000, // 50MB
-      maxFiles: 5
-    }));
+    app.use(
+      '/graphql',
+      graphqlUploadExpress({
+        maxFileSize: 50_000_000, // 50MB
+        maxFiles: 5,
+      })
+    );
 
     // Serve static files from public directory
     app.use(
@@ -180,5 +184,15 @@ async function startServer() {
     process.exit(1);
   }
 }
+// async function getUrl() {
+//   const url = await getPresignedUrl(
+//     'viawave/posts/c4912aef-7dac-453a-8c6d-8d71a51c5d80.mp4',
+//     `15`
+//   );
+//   console.log(url);
+//   return url;
+// }
+
+// getUrl();
 
 startServer();
