@@ -7,7 +7,6 @@ import express from 'express';
 import { graphqlUploadExpress } from 'graphql-upload-minimal';
 import { useServer } from 'graphql-ws/use/ws';
 import http from 'http';
-import { get } from 'mongoose';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 
@@ -15,7 +14,6 @@ import connectDb from './config/dbConfig.js';
 import { resolvers, typeDefs } from './graphql/schema.js';
 import indexRouter from './routes/routes.js';
 import { Logger } from './utils/logger.js';
-import { getPresignedUrl } from './utils/presignedUrl.js';
 import { requireAuth } from './utils/requireAuth.js';
 
 // ----------------------

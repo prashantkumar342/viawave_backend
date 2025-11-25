@@ -127,16 +127,23 @@ export const feedResolvers = {
                 key = normalizeKey(key); // ensure consistent form
 
                 // === presign main URL if not absolute ===
-                if (presignCache.has(key)) {
-                  m.url = presignCache.get(key);
+                if (m.type === 'video') {
+                  //ignore
                 } else {
-                  try {
-                    const signed = await getPresignedUrl(key, PRESIGN_EXPIRES);
-                    presignCache.set(key, signed);
-                    m.url = signed;
-                  } catch (err) {
-                    console.error('Presign error for key', key, err);
-                    // leave original key so client can request presign endpoint if needed
+                  if (presignCache.has(key)) {
+                    m.url = presignCache.get(key);
+                  } else {
+                    try {
+                      const signed = await getPresignedUrl(
+                        key,
+                        PRESIGN_EXPIRES
+                      );
+                      presignCache.set(key, signed);
+                      m.url = signed;
+                    } catch (err) {
+                      console.error('Presign error for key', key, err);
+                      // leave original key so client can request presign endpoint if needed
+                    }
                   }
                 }
 
@@ -167,26 +174,6 @@ export const feedResolvers = {
                         thumbKey,
                         err
                       );
-                      m.thumbnailUrl = null;
-                    }
-                  }
-                } else if (m.type === 'video') {
-                  // 2) If no thumbnail key in DB but media is video => try to generate & presign (getOrCreateThumbnail returns presigned URL)
-                  // Use cache keyed by original media key
-                  if (thumbCache.has(key)) {
-                    m.thumbnailUrl = thumbCache.get(key);
-                  } else {
-                    try {
-                      // getOrCreateThumbnail should generate thumbnail (if missing) and return a presigned URL
-                      const thumbSigned = await getPresignedUrl(
-                        key,
-                        PRESIGN_EXPIRES
-                      );
-                      thumbCache.set(key, thumbSigned);
-                      m.thumbnailUrl = thumbSigned;
-                    } catch (err) {
-                      // generation failed — do not block feed; set null so client can show placeholder
-                      console.error('getOrCreateThumbnail error for', key, err);
                       m.thumbnailUrl = null;
                     }
                   }

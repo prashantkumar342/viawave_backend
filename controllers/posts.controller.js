@@ -1,45 +1,55 @@
 // src/controllers/posts.controller.js
 import asyncHandler from 'express-async-handler';
 // adapt path to your requireAuth
-import { pipeline } from 'stream';
-import { promisify } from 'util';
+import { pipeline } from 'node:stream/promises';
+
+// import { promisify } from 'util';
 
 import {
-  createPresigned,
   getObjectStream,
-  getOrCreateThumbnail,
   headObject,
   normalizeKey,
 } from '../services/posts.service.js';
 
-const pipe = promisify(pipeline);
+// import { requireAuth } from '../utils/requireAuth.js';
 
-/**
- * Stream an S3/MinIO object with Range support.
- * Route: GET /posts/stream/:key
- */
+// const pipe = promisify(pipeline);
+
+const MAX_CHUNK_SIZE = 1024 * 1024; // 1MB
+
 export const streamObjectHandler = asyncHandler(async (req, res) => {
-  // optional: enforce auth
   try {
-    // If you want protected streaming, uncomment:
+    // optional: enforce auth
     // await requireAuth(req);
 
     const rawKey = decodeURIComponent(req.params.key);
     const key = normalizeKey(rawKey);
 
-    // head to get content length and type
+    // 2. Get Metadata
+    // We need the total file size to calculate ranges correctly.
     const head = await headObject(key);
     const fileSize = Number(head.ContentLength);
     const contentType = head.ContentType || 'application/octet-stream';
 
     const rangeHeader = req.headers.range;
 
+    // 3. Handle Range Requests (Standard for Video Streaming)
     if (rangeHeader) {
       const parts = rangeHeader.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-      if (Number.isNaN(start) || Number.isNaN(end) || start >= fileSize) {
+      // Calculate End
+      // If the browser didn't ask for a specific end, OR if the requested end is huge,
+      // we enforce our MAX_CHUNK_SIZE. This is key for "smooth" performance.
+      let end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      // Optimization: Cap the chunk size
+      if (end - start >= MAX_CHUNK_SIZE) {
+        end = start + MAX_CHUNK_SIZE - 1;
+      }
+
+      // Safety check
+      if (start >= fileSize) {
         res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
         return;
       }
@@ -47,6 +57,8 @@ export const streamObjectHandler = asyncHandler(async (req, res) => {
       const range = `bytes=${start}-${end}`;
       const s3Resp = await getObjectStream(key, range);
 
+      // 4. Write Partial Content Headers
+      // write headers
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
@@ -55,60 +67,41 @@ export const streamObjectHandler = asyncHandler(async (req, res) => {
         'Cache-Control': 'public, max-age=3600',
       });
 
-      await pipe(s3Resp.Body, res);
+      // ensure headers are sent immediately (helps client start playback)
+      if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+      }
+
+      // 5. Use Pipeline for Robust Streaming
+      // 's3Resp.Body' is the readable stream from AWS/MinIO
+      // 'res' is the writable stream (Express response)
+      // Pipeline automatically handles destroying streams if the browser disconnects (stops watching).
+      await pipeline(s3Resp.Body, res);
     } else {
-      // full file
+      // 6. Fallback: No Range Header (Download full file)
+      // It is rare for a video player to not send a range header, but we handle it.
       const s3Resp = await getObjectStream(key);
+
       res.writeHead(200, {
         'Content-Length': String(fileSize),
         'Accept-Ranges': 'bytes',
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=3600',
       });
-      await pipe(s3Resp.Body, res);
+
+      await pipeline(s3Resp.Body, res);
     }
   } catch (err) {
-    console.error('streamObjectHandler error:', err);
-    if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
-      res.status(404).json({ error: 'Not found' });
-    } else {
-      res.status(500).json({ error: 'Failed to stream object' });
+    // Avoid logging 'Aborted' errors which happen when users skip/scrub video
+    if (err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+      console.error('streamObjectHandler error:', err);
     }
-  }
-});
 
-/**
- * Return a presigned URL to GET an object (image or other static files).
- * Route: GET /posts/presign/:key
- */
-export const presignHandler = asyncHandler(async (req, res) => {
-  // optional auth: await requireAuth(req);
-  const rawKey = decodeURIComponent(req.params.key);
-  const key = normalizeKey(rawKey);
-
-  try {
-    const url = await createPresigned(key, 60 * 10); // 10 minutes
-    res.json({ url, expiresIn: 60 * 10 });
-  } catch (err) {
-    console.error('presignHandler error', err);
-    res.status(500).json({ error: 'Failed to create presigned url' });
-  }
-});
-
-/**
- * Get or create thumbnail for a video. Returns a presigned URL to thumbnail.
- * Route: GET /posts/thumbnail/:key
- */
-export const thumbnailHandler = asyncHandler(async (req, res) => {
-  // optional auth: await requireAuth(req);
-  const rawKey = decodeURIComponent(req.params.key);
-  const key = normalizeKey(rawKey);
-
-  try {
-    const thumbUrl = await getOrCreateThumbnail(key, 60 * 60);
-    res.json({ url: thumbUrl });
-  } catch (err) {
-    console.error('thumbnailHandler error', err);
-    res.status(500).json({ error: 'Failed to generate/get thumbnail' });
+    if (!res.headersSent) {
+      if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
+        res.status(404).json({ error: 'Not found' });
+      } else {
+        res.status(500).json({ error: 'Failed to stream object' });
+      }
+    }
   }
 });

@@ -28,7 +28,10 @@ export const getObjectStream = async (key, range) => {
   const params = { Bucket: BUCKET, Key: key };
   if (range) params.Range = range;
   const cmd = new GetObjectCommand(params);
-  return s3Client.send(cmd); // returns response with Body as stream
+
+  const resp = await s3Client.send(cmd);
+
+  return resp; // returns response with Body as stream
 };
 
 export const createPresigned = async (key, expiresInSeconds = 3600) => {
