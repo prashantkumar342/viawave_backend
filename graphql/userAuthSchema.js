@@ -6,7 +6,7 @@ import {
   login,
   register,
   sendOTP,
-  validateUserSession
+  validateUserSession,
 } from '../resolvers/userAuth.js';
 
 export const userTypeDefs = gql`
@@ -18,7 +18,7 @@ export const userTypeDefs = gql`
   type User {
     id: ID!
     username: String!
-    email: String!
+    email: String
     firstname: String
     lastname: String
     bio: String
@@ -87,8 +87,6 @@ export const userTypeDefs = gql`
     validateUserSession: loginResponse!
   }
 
-
-
   extend type Mutation {
     register(
       username: String!
@@ -97,11 +95,7 @@ export const userTypeDefs = gql`
       otp: Int!
     ): registerResponse!
 
-    login(
-      email: String!
-      password: String!
-      fcmToken: String!
-    ): loginResponse!
+    login(email: String!, password: String!, fcmToken: String!): loginResponse!
 
     googleAuth(idToken: String!): AuthResponse!
 
@@ -129,5 +123,5 @@ export const userResolvers = {
   Query: {
     _user: () => 'User Query Works!',
     validateUserSession: validateUserSession,
-  }
+  },
 };

@@ -5,7 +5,7 @@ export const findUserTypeDefs = gql`
   type User {
     id: ID!
     username: String!
-    email: String!
+    email: String,
     fullName: String
     dob: String
     gender: String

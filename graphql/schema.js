@@ -1,8 +1,18 @@
 import { mergeResolvers, mergeTypeDefs } from '@graphql-tools/merge';
 
-
+import { appSettingsResovlers } from '../resolvers/appSettingsResovler.js';
+import { appSettingsTypeDefs } from './appSettingsSchema.js';
+import { feedTypeDefs, feedsResolvers } from './feedSchema.js';
 import { findUserResolvers, findUserTypeDefs } from './findUserSchema.js';
-import { notificationsResolvers, notificationTypeDefs } from './notificationSchema.js';
+import {
+  interactionResolvers,
+  interactionTypeDefs,
+} from './interactionSchema.js';
+import {
+  notificationTypeDefs,
+  notificationsResolvers,
+} from './notificationSchema.js';
+import { postSchemaResolvers, postTypeDefs } from './postSchema.js';
 import { userResolvers, userTypeDefs } from './userAuthSchema.js';
 import {
   userConversationResolvers,
@@ -12,12 +22,14 @@ import {
   userLinkRequestResolvers,
   userLinkRequestTypeDefs,
 } from './userLinksSchema.js';
-
-import { feedsResolvers, feedTypeDefs } from './feedSchema.js';
-import { interactionResolvers, interactionTypeDefs } from './interactionSchema.js';
-import { postSchemaResolvers, postTypeDefs } from './postSchema.js';
-import { userModerationResolvers, userModerationTypeDefs } from './userModerationSchema.js';
-import { userUnreadsResolver, userUnreadsTypeDefs } from './userUnreadsSchema.js';
+import {
+  userModerationResolvers,
+  userModerationTypeDefs,
+} from './userModerationSchema.js';
+import {
+  userUnreadsResolver,
+  userUnreadsTypeDefs,
+} from './userUnreadsSchema.js';
 
 const rootTypeDefs = `#graphql
 type Query {
@@ -45,7 +57,8 @@ export const typeDefs = mergeTypeDefs([
   userModerationTypeDefs,
   feedTypeDefs,
   interactionTypeDefs,
-  userUnreadsTypeDefs
+  userUnreadsTypeDefs,
+  appSettingsTypeDefs,
 ]);
 export const resolvers = mergeResolvers([
   userResolvers,
@@ -57,5 +70,6 @@ export const resolvers = mergeResolvers([
   userModerationResolvers,
   feedsResolvers,
   interactionResolvers,
-  userUnreadsResolver
+  userUnreadsResolver,
+  appSettingsResovlers,
 ]);

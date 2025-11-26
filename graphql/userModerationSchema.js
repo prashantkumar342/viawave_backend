@@ -7,7 +7,7 @@ export const userModerationTypeDefs = gql`
   type User {
       id: ID!
       username: String!
-      email: String!
+      email: String
       firstname: String
       lastname: String
       bio: String

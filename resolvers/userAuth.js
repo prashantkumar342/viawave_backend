@@ -5,6 +5,7 @@ import { sendMail } from '../config/mailConfig.js';
 import { syncUserUnreads } from '../helpers/syncUserUnreads.helper.js';
 import { Otp as otpModel } from '../models/otpMode.js';
 import { User as userModel } from '../models/userModel.js';
+import { UserPrivacySecurityModel } from '../models/userPrivacySecurityModel.js';
 import { otpMailTemplate } from '../templates/otpMailTemplate.js';
 import generateOTP from '../utils/generateOtp.js';
 import generateToken from '../utils/generateToken.js';
@@ -50,12 +51,26 @@ export const googleAuth = async (_, { idToken }, { res }) => {
         firstname: given_name,
         lastname: family_name,
       });
+
+      await UserPrivacySecurityModel.create({
+        userId: user._id,
+      });
     } else if (!user.googleId) {
       // 5. Link Google to existing email-based user (optional)
       user.googleId = googleId;
       user.provider = 'google';
       user.email_verified = true;
       await user.save();
+
+      // Check if privacy settings exist, if not create them
+      const privacySettings = await UserPrivacySecurityModel.findOne({
+        userId: user._id,
+      });
+      if (!privacySettings) {
+        await UserPrivacySecurityModel.create({
+          userId: user._id,
+        });
+      }
     }
 
     // 6. Generate token and update last login
@@ -172,6 +187,10 @@ export const register = async (_, { username, email, password, otp }) => {
     await newUser.save();
     await otpModel.deleteOne({ email });
 
+    const UserPrivacySecurity = await UserPrivacySecurityModel.create({
+      userId: newUser._id,
+    });
+
     return {
       user: newUser,
       success: true,
@@ -216,7 +235,7 @@ export const login = async (_, { email, password, fcmToken }, { res }) => {
     await userModel.findByIdAndUpdate(user._id, {
       lastLogin: new Date(),
       token: token,
-      fcmToken: fcmToken
+      fcmToken: fcmToken,
     });
 
     const userObj = user.toObject();
